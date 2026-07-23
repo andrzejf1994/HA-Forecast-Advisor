@@ -8,7 +8,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 
 from .api.websocket import async_register_websocket_api
-from .const import DOMAIN
+from .const import CONF_AI_TASK_ENGINE, DOMAIN
 from .coordinator import ForecastFusionCoordinator, ForecastFusionRuntimeData
 from .frontend import async_register_panel, async_unregister_panel
 
@@ -68,6 +68,30 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async def handle_generate_ai_analysis(call: ServiceCall) -> dict[str, Any]:
         """Handle generate_ai_analysis service call."""
         _LOGGER.info("Handling forecast_fusion.generate_ai_analysis service call")
+
+        for entry in hass.config_entries.async_entries(DOMAIN):
+            ai_engine = entry.options.get(CONF_AI_TASK_ENGINE, entry.data.get(CONF_AI_TASK_ENGINE))
+            if ai_engine:
+                try:
+                    from homeassistant.components import conversation
+
+                    prompt = "Summarize current fused weather forecast and personal comfort recommendations."
+                    res = await conversation.async_converse(
+                        hass=hass,
+                        text=prompt,
+                        conversation_id=None,
+                        device_id=None,
+                        agent_id=ai_engine,
+                        context=call.context,
+                    )
+                    speech = res.response.speech.get("plain", {}).get("speech", "")
+                    if speech:
+                        return {"status": "ok", "analysis": speech}
+                except Exception as err:
+                    _LOGGER.warning(
+                        "Could not execute AI task conversation agent %s: %s", ai_engine, err
+                    )
+
         return {"status": "ok", "analysis": "Forecast Fusion: Weather conditions are stable."}
 
     hass.services.async_register(DOMAIN, "refresh", handle_refresh)

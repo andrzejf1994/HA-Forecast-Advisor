@@ -3,11 +3,12 @@
     "step": {
       "user": {
         "title": "Forecast Fusion & Personal Comfort Setup",
-        "description": "Select weather forecast entities and optional real weather verification sensors.",
+        "description": "Select weather forecast entities, optional AI provider task engine, and real weather verification sensors.",
         "data": {
           "name": "Integration Name",
           "sources": "Weather Forecast Entities",
           "poll_interval_minutes": "Polling Interval (minutes)",
+          "ai_task_engine": "AI Task Engine / Conversation Agent (Optional)",
           "temperature_sensor": "Real Temperature Sensor (Optional)",
           "humidity_sensor": "Real Humidity Sensor (Optional)",
           "precipitation_sensor": "Real Precipitation Sensor (Optional)",
@@ -26,10 +27,11 @@
     "step": {
       "init": {
         "title": "Forecast Fusion Options",
-        "description": "Configure forecast sources, update intervals, and verification sensors.",
+        "description": "Configure forecast sources, update intervals, AI task engine, and verification sensors.",
         "data": {
           "sources": "Weather Forecast Entities",
           "poll_interval_minutes": "Polling Interval (minutes)",
+          "ai_task_engine": "AI Task Engine / Conversation Agent (Optional)",
           "temperature_sensor": "Real Temperature Sensor (Optional)",
           "humidity_sensor": "Real Humidity Sensor (Optional)",
           "precipitation_sensor": "Real Precipitation Sensor (Optional)",

@@ -139,11 +139,29 @@ async def ws_get_history(hass: HomeAssistant, connection: Any, msg: dict[str, An
             "start_at": o.start_at.isoformat(),
             "end_at": o.end_at.isoformat(),
             "value": o.value,
+            "unit": o.unit,
             "source_mode": o.source_mode.value,
             "source_entity_id": o.source_entity_id,
         }
-        for o in history_records[:50]
+        for o in history_records[:200]
     ]
+
+    fused_summary = []
+    if coordinator.fused_forecast:
+        for p in coordinator.fused_forecast:
+            fused_summary.append(
+                {
+                    "valid_at": p.valid_at.isoformat(),
+                    "temperature": p.temperature.value,
+                    "apparent_temperature": p.apparent_temperature.value,
+                    "humidity": p.humidity.value,
+                    "precipitation_probability": p.precipitation_probability.value,
+                    "precipitation_amount": p.precipitation_amount.value,
+                    "wind_speed": p.wind_speed.value,
+                    "condition": p.condition.value,
+                    "overall_confidence": p.overall_confidence,
+                }
+            )
 
     connection.send_result(
         msg["id"],
@@ -151,6 +169,7 @@ async def ws_get_history(hass: HomeAssistant, connection: Any, msg: dict[str, An
             "status": "ok",
             "observations_count": len(history_records),
             "recent_observations": serialized_obs,
+            "fused_points": fused_summary,
         },
     )
 

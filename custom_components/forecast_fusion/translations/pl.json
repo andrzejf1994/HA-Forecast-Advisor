@@ -3,11 +3,12 @@
     "step": {
       "user": {
         "title": "Konfiguracja Forecast Fusion & Personal Comfort",
-        "description": "Wybierz encje prognozy pogody oraz opcjonalne czujniki weryfikujące prawdziwą pogodę.",
+        "description": "Wybierz encje prognozy pogody, opcjonalnego silnika AI (AI Task) oraz czujniki weryfikujące.",
         "data": {
           "name": "Nazwa integracji",
           "sources": "Encje prognozy pogody",
           "poll_interval_minutes": "Interwał pobierania (minuty)",
+          "ai_task_engine": "Silnik AI Task / Agent konwersacji (opcjonalny)",
           "temperature_sensor": "Czujnik temperatury rzeczywistej (opcjonalny)",
           "humidity_sensor": "Czujnik wilgotności rzeczywistej (opcjonalny)",
           "precipitation_sensor": "Czujnik opadów rzeczywistych (opcjonalny)",
@@ -26,10 +27,11 @@
     "step": {
       "init": {
         "title": "Opcje Forecast Fusion",
-        "description": "Konfiguracja źródeł prognozy, interwałów i czujników weryfikujących.",
+        "description": "Konfiguracja źródeł prognozy, silnika AI i czujników weryfikujących.",
         "data": {
           "sources": "Encje prognozy pogody",
           "poll_interval_minutes": "Interwał pobierania (minuty)",
+          "ai_task_engine": "Silnik AI Task / Agent konwersacji (opcjonalny)",
           "temperature_sensor": "Czujnik temperatury rzeczywistej (opcjonalny)",
           "humidity_sensor": "Czujnik wilgotności rzeczywistej (opcjonalny)",
           "precipitation_sensor": "Czujnik opadów rzeczywistych (opcjonalny)",

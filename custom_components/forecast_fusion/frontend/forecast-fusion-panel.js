@@ -94,6 +94,7 @@ class ForecastFusionPanel extends HTMLElement {
     const points = (this.data && this.data.fused_points) ? this.data.fused_points : [];
     const sensors = (this.data && this.data.verification_sensors) ? this.data.verification_sensors : {};
     const historyObs = (this.historyData && this.historyData.recent_observations) ? this.historyData.recent_observations : [];
+    const historyFused = (this.historyData && this.historyData.fused_points) ? this.historyData.fused_points : (this.data && this.data.fused_points ? this.data.fused_points : []);
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -391,14 +392,14 @@ class ForecastFusionPanel extends HTMLElement {
       ${
         this.loading
           ? `<div class="loading-spinner">⏳ Ładowanie danych z Forecast Fusion...</div>`
-          : this.renderTabContent(points, sensors, historyObs)
+          : this.renderTabContent(points, sensors, historyObs, historyFused)
       }
     `;
 
     this.bindEvents();
   }
 
-  renderTabContent(points, sensors, historyObs) {
+  renderTabContent(points, sensors, historyObs, historyFused) {
     if (this.activeTab === 'forecast') {
       return `
         <div class="card">
@@ -519,9 +520,9 @@ class ForecastFusionPanel extends HTMLElement {
               </select>
             </div>
 
-            <!-- Nowa sekcja Ubioru (Spodnie, Bluza, Kurtka) -->
+            <!-- Sekcja Ubioru z osobnymi opcjami dla wiatrówki, płaszcza, kurtki przeciwdeszczowej i zimowej -->
             <div class="clothing-section">
-              <h3>👔 Zastosowany Ubiór (Pants, Sweatshirt, Jacket)</h3>
+              <h3>👔 Zastosowany Ubiór (Spodnie, Bluza, Kurtka)</h3>
               <div class="grid-2" style="grid-template-columns: 1fr 1fr 1fr;">
                 <div class="form-group">
                   <label for="fb-pants">👖 Spodnie / Dół:</label>
@@ -540,11 +541,13 @@ class ForecastFusionPanel extends HTMLElement {
                   </select>
                 </div>
                 <div class="form-group">
-                  <label for="fb-jacket">🧥 Kurtka / Płaszcz:</label>
+                  <label for="fb-jacket">🧥 Kurtka / Odzież wierzchnia:</label>
                   <select id="fb-jacket" class="form-control">
                     <option value="kurtka_brak" selected>Brak kurtki</option>
-                    <option value="kurtka_wiatrowka">Wiatrówka / Płaszcz</option>
-                    <option value="kurtka_zimowa">Kurtka zimowa / Przeciwdeszczowa</option>
+                    <option value="wiatrowka">Wiatrówka</option>
+                    <option value="plaszcz">Płaszcz</option>
+                    <option value="kurtka_przeciwdeszczowa">Kurtka przeciwdeszczowa</option>
+                    <option value="kurtka_zimowa">Kurtka zimowa</option>
                   </select>
                 </div>
               </div>
@@ -568,35 +571,109 @@ class ForecastFusionPanel extends HTMLElement {
     }
 
     if (this.activeTab === 'history') {
+      // Group observations and forecasts by time bucket
+      const groupsMap = new Map();
+
+      const getHourKey = (isoStr) => {
+        if (!isoStr) return null;
+        const d = new Date(isoStr);
+        if (isNaN(d.getTime())) return null;
+        d.setMinutes(0, 0, 0);
+        return d.toISOString();
+      };
+
+      // 1. Group observations by time slot
+      historyObs.forEach(o => {
+        const key = getHourKey(o.start_at || o.end_at);
+        if (!key) return;
+        if (!groupsMap.has(key)) {
+          groupsMap.set(key, {
+            timeKey: key,
+            startAt: o.start_at,
+            endAt: o.end_at,
+            obs: {},
+            forecast: null
+          });
+        }
+        const item = groupsMap.get(key);
+        item.obs[o.parameter] = o.value;
+      });
+
+      // 2. Group fused forecasts by time slot
+      historyFused.forEach(fp => {
+        const key = getHourKey(fp.valid_at);
+        if (!key) return;
+        if (!groupsMap.has(key)) {
+          groupsMap.set(key, {
+            timeKey: key,
+            startAt: fp.valid_at,
+            endAt: fp.valid_at,
+            obs: {},
+            forecast: null
+          });
+        }
+        const item = groupsMap.get(key);
+        item.forecast = fp;
+      });
+
+      const groupedRows = Array.from(groupsMap.values()).sort((a, b) => new Date(b.timeKey) - new Date(a.timeKey));
+
       return `
         <div class="card">
-          <h2>Dane Historyczne i Zarejestrowane Obserwacje</h2>
+          <h2>Dane Historyczne Pogody: Obserwacje Rzeczywiste vs Prognoza</h2>
+          <p style="font-size: 13px; color: #94a3b8; margin-bottom: 20px;">
+            Wiersze zgrupowane według zakresu czasu (godziny). Kolumny prezentują odczyty fizyczne czujników rzeczywistych obok wartości przewidywanych przez fuzję prognoz wraz z obliczoną różnicą (błędem).
+          </p>
           <div class="table-responsive">
             <table>
               <thead>
                 <tr>
-                  <th>ID Obserwacji</th>
-                  <th>Parametr</th>
-                  <th>Wartość</th>
-                  <th>Czas Od</th>
-                  <th>Czas Do</th>
-                  <th>Źródło</th>
+                  <th>Zakres Czasu</th>
+                  <th>Rzeczywista Temp (°C)</th>
+                  <th>Rzeczywisty Opad</th>
+                  <th>Rzeczywisty Wiatr (km/h)</th>
+                  <th>Prognoza Temp (°C)</th>
+                  <th>Prognoza Opad (mm)</th>
+                  <th>Prognoza Wiatr (km/h)</th>
+                  <th>Warunki Prognozy</th>
+                  <th>Różnica Temp (°C)</th>
                 </tr>
               </thead>
               <tbody>
                 ${
-                  historyObs.length === 0
-                    ? `<tr><td colspan="6" style="text-align:center; color:#94a3b8;">Brak zapisanych obserwacji historycznych.</td></tr>`
-                    : historyObs.map(o => `
-                        <tr>
-                          <td><code>${o.id ? o.id.slice(0, 8) : '-'}</code></td>
-                          <td><b>${o.parameter}</b></td>
-                          <td style="color:#38bdf8; font-weight:700;">${o.value}</td>
-                          <td>${new Date(o.start_at).toLocaleString('pl-PL')}</td>
-                          <td>${new Date(o.end_at).toLocaleString('pl-PL')}</td>
-                          <td><span class="confidence-badge">${o.source_mode || 'manual'}</span></td>
-                        </tr>
-                      `).join('')
+                  groupedRows.length === 0
+                    ? `<tr><td colspan="9" style="text-align:center; color:#94a3b8;">Brak zapisanych obserwacji ani prognoz dla zakresów czasu.</td></tr>`
+                    : groupedRows.map(r => {
+                        const obsTemp = r.obs.temperature != null ? parseFloat(r.obs.temperature) : null;
+                        const obsPrecip = r.obs.precipitation != null ? r.obs.precipitation : '-';
+                        const obsWind = r.obs.wind_speed != null ? parseFloat(r.obs.wind_speed) : null;
+
+                        const fcTemp = r.forecast && r.forecast.temperature != null ? r.forecast.temperature : null;
+                        const fcPrecip = r.forecast && r.forecast.precipitation_amount != null ? r.forecast.precipitation_amount : null;
+                        const fcWind = r.forecast && r.forecast.wind_speed != null ? r.forecast.wind_speed : null;
+                        const fcCond = r.forecast && r.forecast.condition ? r.forecast.condition : '-';
+
+                        let tempDiff = '-';
+                        if (obsTemp != null && fcTemp != null) {
+                          const diff = (fcTemp - obsTemp).toFixed(1);
+                          const sign = diff > 0 ? '+' : '';
+                          tempDiff = `${sign}${diff}°C`;
+                        }
+
+                        return `
+                          <tr>
+                            <td><b>${new Date(r.timeKey).toLocaleString('pl-PL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</b></td>
+                            <td style="color:#60a5fa; font-weight:700;">${obsTemp != null ? obsTemp.toFixed(1) : '-'}</td>
+                            <td style="color:#38bdf8;">${obsPrecip}</td>
+                            <td>${obsWind != null ? obsWind.toFixed(1) : '-'}</td>
+                            <td style="color:#818cf8; font-weight:700;">${fcTemp != null ? fcTemp.toFixed(1) : '-'}</td>
+                            <td style="color:#38bdf8;">${fcPrecip != null ? fcPrecip.toFixed(1) : '-'}</td>
+                            <td>${fcWind != null ? fcWind.toFixed(1) : '-'}</td>
+                            <td><span class="confidence-badge">${fcCond}</span></td>
+                            <td style="font-weight:700; color:${tempDiff.startsWith('+') ? '#f87171' : tempDiff.startsWith('-') ? '#60a5fa' : '#94a3b8'}">${tempDiff}</td>
+                          </tr>
+                        `;
+                      }).join('')
                 }
               </tbody>
             </table>

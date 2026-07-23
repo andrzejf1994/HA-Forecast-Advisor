@@ -13,12 +13,23 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_AI_TASK_ENGINE,
     CONF_POLL_INTERVAL_MINUTES,
     CONF_SOURCES,
     CONF_VERIFICATION_SENSORS,
     DEFAULT_POLL_INTERVAL_MINUTES,
     DOMAIN,
 )
+
+
+def _get_conversation_agent_selector() -> selector.Selector[Any]:
+    """Get the Home Assistant conversation agent selector safely."""
+    if hasattr(selector, "ConversationAgentSelector"):
+        try:
+            return selector.ConversationAgentSelector()
+        except Exception:
+            pass
+    return selector.EntitySelector(selector.EntitySelectorConfig(domain="conversation"))
 
 
 class ForecastFusionConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -63,6 +74,7 @@ class ForecastFusionConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_POLL_INTERVAL_MINUTES,
                     default=DEFAULT_POLL_INTERVAL_MINUTES,
                 ): vol.All(vol.Coerce(int), vol.Range(min=5, max=1440)),
+                vol.Optional(CONF_AI_TASK_ENGINE): _get_conversation_agent_selector(),
                 vol.Optional("temperature_sensor"): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
                 ),
@@ -120,6 +132,10 @@ class ForecastFusionOptionsFlowHandler(OptionsFlow):
             CONF_POLL_INTERVAL_MINUTES,
             self.config_entry.data.get(CONF_POLL_INTERVAL_MINUTES, DEFAULT_POLL_INTERVAL_MINUTES),
         )
+        current_ai_engine = self.config_entry.options.get(
+            CONF_AI_TASK_ENGINE,
+            self.config_entry.data.get(CONF_AI_TASK_ENGINE),
+        )
         current_verif = self.config_entry.options.get(
             CONF_VERIFICATION_SENSORS,
             self.config_entry.data.get(CONF_VERIFICATION_SENSORS, {}),
@@ -137,6 +153,13 @@ class ForecastFusionOptionsFlowHandler(OptionsFlow):
                 default=current_poll_interval,
             ): vol.All(vol.Coerce(int), vol.Range(min=5, max=1440)),
         }
+
+        if current_ai_engine:
+            schema_dict[vol.Optional(CONF_AI_TASK_ENGINE, default=current_ai_engine)] = (
+                _get_conversation_agent_selector()
+            )
+        else:
+            schema_dict[vol.Optional(CONF_AI_TASK_ENGINE)] = _get_conversation_agent_selector()
 
         if current_verif.get("temperature"):
             schema_dict[
