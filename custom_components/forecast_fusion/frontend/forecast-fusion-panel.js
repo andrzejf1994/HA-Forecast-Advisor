@@ -127,7 +127,7 @@ class ForecastFusionPanel extends HTMLElement {
 
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 12px;
         }
 
         .subtitle {
@@ -360,7 +360,7 @@ class ForecastFusionPanel extends HTMLElement {
 
       <div class="header-container">
         <div class="title-area">
-          <h1>⚡ Forecast Fusion & Personal Comfort</h1>
+          <h1><img src="/forecast_fusion_panel/icon.png" style="width:36px; height:36px; border-radius:8px; object-fit:cover; vertical-align:middle;"> Forecast Fusion & Personal Comfort</h1>
           <p class="subtitle">Inteligentna synteza prognoz pogodowych i uczenie preferencji termicznych</p>
         </div>
         <div>

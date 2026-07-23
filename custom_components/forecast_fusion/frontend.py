@@ -69,9 +69,10 @@ async def async_register_panel(hass: HomeAssistant) -> bool:
     if hass.data.get(PANEL_REGISTERED_KEY):
         return True
 
-    src = Path(__file__).parent / "frontend" / PANEL_JS_NAME
-    if not await hass.async_add_executor_job(src.exists):
-        _LOGGER.warning("Panel JS not found at %s — sidebar panel not registered", src)
+    src_dir = Path(__file__).parent / "frontend"
+    src_js = src_dir / PANEL_JS_NAME
+    if not await hass.async_add_executor_job(src_js.exists):
+        _LOGGER.warning("Panel JS not found at %s — sidebar panel not registered", src_js)
         return False
 
     if not hass.data.get(PANEL_STATIC_REGISTERED):
@@ -82,13 +83,13 @@ async def async_register_panel(hass: HomeAssistant) -> bool:
 
                 if hasattr(hass.http, "async_register_static_paths"):
                     await hass.http.async_register_static_paths(
-                        [StaticPathConfig(PANEL_JS_URL, str(src), True)]
+                        [StaticPathConfig(f"/{LOCAL_SUBDIR}", str(src_dir), True)]
                     )
                 else:
-                    _register_static_path(hass, PANEL_JS_URL, str(src))
+                    _register_static_path(hass, f"/{LOCAL_SUBDIR}", str(src_dir))
             except Exception as exc:
                 _LOGGER.debug("Panel static path registration failed, falling back: %s", exc)
-                _register_static_path(hass, PANEL_JS_URL, str(src))
+                _register_static_path(hass, f"/{LOCAL_SUBDIR}", str(src_dir))
         except Exception as exc:
             _LOGGER.warning("Forecast Fusion panel static path registration failed: %s", exc)
             hass.data.pop(PANEL_STATIC_REGISTERED, None)
