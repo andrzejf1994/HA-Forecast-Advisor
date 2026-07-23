@@ -1,0 +1,36 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Konfiguracja Forecast Fusion & Personal Comfort",
+        "description": "Wybierz encje prognozy pogody do łączenia i ewaluacji.",
+        "data": {
+          "name": "Nazwa integracji",
+          "sources": "Encje prognozy pogody",
+          "poll_interval_minutes": "Interwał pobierania (minuty)"
+        }
+      }
+    },
+    "error": {
+      "no_sources": "Musisz wybrać przynajmniej jedną encję pogodową."
+    },
+    "abort": {
+      "already_configured": "Forecast Fusion jest już skonfigurowany."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opcje Forecast Fusion",
+        "description": "Konfiguracja źródeł prognozy i interwałów odświeżania.",
+        "data": {
+          "sources": "Encje prognozy pogody",
+          "poll_interval_minutes": "Interwał pobierania (minuty)"
+        }
+      }
+    },
+    "error": {
+      "no_sources": "Musisz wybrać przynajmniej jedną encję pogodową."
+    }
+  }
+}

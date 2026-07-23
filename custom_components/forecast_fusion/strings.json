@@ -1,0 +1,66 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Forecast Fusion & Personal Comfort Setup",
+        "description": "Select weather forecast entities to aggregate and evaluate.",
+        "data": {
+          "name": "Integration Name",
+          "sources": "Weather Forecast Entities",
+          "poll_interval_minutes": "Polling Interval (minutes)"
+        }
+      }
+    },
+    "error": {
+      "no_sources": "You must select at least one weather forecast entity."
+    },
+    "abort": {
+      "already_configured": "Forecast Fusion is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Forecast Fusion Options",
+        "description": "Configure forecast sources and update intervals.",
+        "data": {
+          "sources": "Weather Forecast Entities",
+          "poll_interval_minutes": "Polling Interval (minutes)"
+        }
+      }
+    },
+    "error": {
+      "no_sources": "You must select at least one weather forecast entity."
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Refresh Forecasts",
+      "description": "Immediately fetch weather forecasts from all configured weather sources."
+    },
+    "record_observation": {
+      "name": "Record Observation",
+      "description": "Record a ground truth weather observation (manual or entity)."
+    },
+    "record_comfort_feedback": {
+      "name": "Record Comfort Feedback",
+      "description": "Record personal comfort feedback for outfit learning."
+    },
+    "recalculate": {
+      "name": "Recalculate Fusion Model",
+      "description": "Recalculate historical accuracy metrics and fusion weights."
+    },
+    "cleanup": {
+      "name": "Cleanup Old Data",
+      "description": "Run retention cleanup manually."
+    },
+    "export_data": {
+      "name": "Export Data",
+      "description": "Export anonymous verification and comfort data without credentials or notes."
+    },
+    "generate_ai_analysis": {
+      "name": "Generate AI Analysis",
+      "description": "Generate natural language weather analysis using configured AI provider."
+    }
+  }
+}

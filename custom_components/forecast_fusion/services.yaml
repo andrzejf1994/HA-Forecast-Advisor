@@ -1,0 +1,94 @@
+refresh:
+  name: Refresh Forecasts
+  description: Immediately fetch weather forecasts from all configured weather sources.
+
+record_observation:
+  name: Record Observation
+  description: Record a ground truth weather observation (manual or entity).
+  fields:
+    parameter:
+      name: Parameter
+      description: Weather parameter being observed (e.g. temperature, precipitation).
+      required: true
+      example: "temperature"
+      selector:
+        text:
+    start:
+      name: Start Time
+      description: Start datetime of observation window.
+      required: true
+      example: "2026-07-22T15:00:00+02:00"
+      selector:
+        datetime:
+    end:
+      name: End Time
+      description: End datetime of observation window.
+      required: true
+      example: "2026-07-22T16:00:00+02:00"
+      selector:
+        datetime:
+    value:
+      name: Value
+      description: Observed value (number, boolean, or rain category string).
+      required: true
+      example: 22.5
+      selector:
+        text:
+
+record_comfort_feedback:
+  name: Record Comfort Feedback
+  description: Record personal comfort feedback for outfit learning.
+  fields:
+    user_profile_id:
+      name: User Profile ID
+      description: Identifier of the user.
+      required: true
+      example: "andrzej"
+      selector:
+        text:
+    start:
+      name: Start Time
+      description: Start datetime of period evaluated.
+      required: true
+      selector:
+        datetime:
+    end:
+      name: End Time
+      description: End datetime of period evaluated.
+      required: true
+      selector:
+        datetime:
+    comfort:
+      name: Comfort Rating
+      description: Comfort score (-3 cold, 0 optimal, +3 hot).
+      required: true
+      example: 0
+      selector:
+        number:
+          min: -3
+          max: 3
+          step: 1
+
+recalculate:
+  name: Recalculate Fusion Model
+  description: Recalculate historical accuracy metrics and fusion weights.
+
+cleanup:
+  name: Cleanup Old Data
+  description: Run retention cleanup manually.
+  fields:
+    dry_run:
+      name: Dry Run
+      description: If true, returns record counts without deleting data.
+      required: false
+      default: false
+      selector:
+        boolean:
+
+export_data:
+  name: Export Data
+  description: Export anonymous verification and comfort data without credentials or notes.
+
+generate_ai_analysis:
+  name: Generate AI Analysis
+  description: Generate natural language weather analysis using configured AI provider.
