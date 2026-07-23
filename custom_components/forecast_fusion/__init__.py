@@ -31,9 +31,28 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     # Safely register static path for frontend JS panel if HTTP server is initialized
     if getattr(hass, "http", None) is not None:
         frontend_path = hass.config.path("custom_components/forecast_fusion/frontend")
-        hass.http.register_static_path(  # type: ignore[union-attr]
-            "/forecast_fusion_panel", frontend_path, cache_headers=False
-        )
+        if hasattr(hass.http, "async_register_static_paths"):
+            try:
+                from homeassistant.components.http import StaticPathConfig
+
+                await hass.http.async_register_static_paths(
+                    [
+                        StaticPathConfig(
+                            url_path="/forecast_fusion_panel",
+                            path=frontend_path,
+                            cache_headers=False,
+                        )
+                    ]
+                )
+            except Exception as err:
+                _LOGGER.debug("Could not async_register_static_paths: %s", err)
+        elif hasattr(hass.http, "register_static_path"):
+            try:
+                hass.http.register_static_path(  # type: ignore[union-attr]
+                    "/forecast_fusion_panel", frontend_path, cache_headers=False
+                )
+            except Exception as err:
+                _LOGGER.debug("Could not register_static_path: %s", err)
 
     # Safely register sidebar panel
     try:
