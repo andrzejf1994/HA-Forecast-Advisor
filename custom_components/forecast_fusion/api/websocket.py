@@ -5,12 +5,26 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 
 from ..const import CONF_VERIFICATION_SENSORS, DOMAIN
 from ..coordinator import ForecastFusionCoordinator, ForecastFusionRuntimeData
 from ..core.enums import WeatherParameter
 from ..core.normalizer import ensure_utc
+
+
+def _get_entry(hass: HomeAssistant, msg: dict[str, Any]) -> ConfigEntry | None:
+    """Helper to get ConfigEntry from msg or fallback to first active entry."""
+    entry_id = msg.get("config_entry_id")
+    if entry_id:
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if entry and entry.domain == DOMAIN:
+            return entry
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if entries:
+        return entries[0]
+    return None
 
 
 @callback
@@ -26,15 +40,14 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
 @websocket_api.websocket_command(  # type: ignore[attr-defined]
     {
         vol.Required("type"): "forecast_fusion/get_overview",
-        vol.Required("config_entry_id"): str,
+        vol.Optional("config_entry_id"): str,
     }
 )
 @websocket_api.async_response  # type: ignore[attr-defined]
 async def ws_get_overview(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
     """Handle forecast_fusion/get_overview command."""
-    entry_id = msg["config_entry_id"]
-    entry = hass.config_entries.async_get_entry(entry_id)
-    if not entry or entry.domain != DOMAIN:
+    entry = _get_entry(hass, msg)
+    if not entry:
         connection.send_error(msg["id"], "entry_not_found", "Config entry not found")
         return
 
@@ -59,11 +72,14 @@ async def ws_get_overview(hass: HomeAssistant, connection: Any, msg: dict[str, A
                 }
             )
 
-    verification_sensors = entry.options.get(CONF_VERIFICATION_SENSORS, {})
+    verification_sensors = entry.options.get(
+        CONF_VERIFICATION_SENSORS, entry.data.get(CONF_VERIFICATION_SENSORS, {})
+    )
 
     connection.send_result(
         msg["id"],
         {
+            "config_entry_id": entry.entry_id,
             "last_update_success": coordinator.last_update_success,
             "sources": coordinator.sources,
             "fusion_algorithm": coordinator.algorithm,
@@ -77,15 +93,14 @@ async def ws_get_overview(hass: HomeAssistant, connection: Any, msg: dict[str, A
 @websocket_api.websocket_command(  # type: ignore[attr-defined]
     {
         vol.Required("type"): "forecast_fusion/get_accuracy",
-        vol.Required("config_entry_id"): str,
+        vol.Optional("config_entry_id"): str,
     }
 )
 @websocket_api.async_response  # type: ignore[attr-defined]
 async def ws_get_accuracy(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
     """Handle forecast_fusion/get_accuracy command."""
-    entry_id = msg["config_entry_id"]
-    entry = hass.config_entries.async_get_entry(entry_id)
-    if not entry or entry.domain != DOMAIN:
+    entry = _get_entry(hass, msg)
+    if not entry:
         connection.send_error(msg["id"], "entry_not_found", "Config entry not found")
         return
 
@@ -102,22 +117,20 @@ async def ws_get_accuracy(hass: HomeAssistant, connection: Any, msg: dict[str, A
 @websocket_api.websocket_command(  # type: ignore[attr-defined]
     {
         vol.Required("type"): "forecast_fusion/get_history",
-        vol.Required("config_entry_id"): str,
+        vol.Optional("config_entry_id"): str,
     }
 )
 @websocket_api.async_response  # type: ignore[attr-defined]
 async def ws_get_history(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
     """Handle forecast_fusion/get_history command."""
-    entry_id = msg["config_entry_id"]
-    entry = hass.config_entries.async_get_entry(entry_id)
-    if not entry or entry.domain != DOMAIN:
+    entry = _get_entry(hass, msg)
+    if not entry:
         connection.send_error(msg["id"], "entry_not_found", "Config entry not found")
         return
 
     runtime_data: ForecastFusionRuntimeData = entry.runtime_data
     coordinator = runtime_data.coordinator
 
-    # Fetch recorded observations and feedback using query_observations
     history_records = await coordinator.repo.query_observations()
     serialized_obs = [
         {
@@ -145,7 +158,7 @@ async def ws_get_history(hass: HomeAssistant, connection: Any, msg: dict[str, An
 @websocket_api.websocket_command(  # type: ignore[attr-defined]
     {
         vol.Required("type"): "forecast_fusion/submit_feedback",
-        vol.Required("config_entry_id"): str,
+        vol.Optional("config_entry_id"): str,
         vol.Required("user_profile_id"): str,
         vol.Required("start_at"): str,
         vol.Required("end_at"): str,
@@ -160,9 +173,8 @@ async def ws_get_history(hass: HomeAssistant, connection: Any, msg: dict[str, An
 @websocket_api.async_response  # type: ignore[attr-defined]
 async def ws_submit_feedback(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
     """Handle forecast_fusion/submit_feedback command for setting comfort rating/observation."""
-    entry_id = msg["config_entry_id"]
-    entry = hass.config_entries.async_get_entry(entry_id)
-    if not entry or entry.domain != DOMAIN:
+    entry = _get_entry(hass, msg)
+    if not entry:
         connection.send_error(msg["id"], "entry_not_found", "Config entry not found")
         return
 
@@ -173,7 +185,6 @@ async def ws_submit_feedback(hass: HomeAssistant, connection: Any, msg: dict[str
     end_utc = ensure_utc(msg["end_at"]) or datetime.now(UTC)
     observed_temp = msg.get("observed_temp_c", 20.0)
 
-    # Record comfort feedback
     fb = await coordinator.feedback_manager.record_feedback(
         user_profile_id=msg["user_profile_id"],
         start_at=start_utc,
@@ -185,7 +196,6 @@ async def ws_submit_feedback(hass: HomeAssistant, connection: Any, msg: dict[str
         transport_value=msg.get("transport_value"),
     )
 
-    # Record optional manual rain observation
     if "manual_rain_observation" in msg and msg["manual_rain_observation"]:
         await coordinator.observation_manager.record_manual_observation(
             parameter=WeatherParameter.PRECIPITATION,
@@ -206,7 +216,7 @@ async def ws_submit_feedback(hass: HomeAssistant, connection: Any, msg: dict[str
 @websocket_api.websocket_command(  # type: ignore[attr-defined]
     {
         vol.Required("type"): "forecast_fusion/save_verification_sensors",
-        vol.Required("config_entry_id"): str,
+        vol.Optional("config_entry_id"): str,
         vol.Required("verification_sensors"): dict,
     }
 )
@@ -215,9 +225,8 @@ async def ws_save_verification_sensors(
     hass: HomeAssistant, connection: Any, msg: dict[str, Any]
 ) -> None:
     """Handle forecast_fusion/save_verification_sensors command."""
-    entry_id = msg["config_entry_id"]
-    entry = hass.config_entries.async_get_entry(entry_id)
-    if not entry or entry.domain != DOMAIN:
+    entry = _get_entry(hass, msg)
+    if not entry:
         connection.send_error(msg["id"], "entry_not_found", "Config entry not found")
         return
 

@@ -3,11 +3,15 @@
     "step": {
       "user": {
         "title": "Forecast Fusion & Personal Comfort Setup",
-        "description": "Select weather forecast entities to aggregate and evaluate.",
+        "description": "Select weather forecast entities and optional real weather verification sensors.",
         "data": {
           "name": "Integration Name",
           "sources": "Weather Forecast Entities",
-          "poll_interval_minutes": "Polling Interval (minutes)"
+          "poll_interval_minutes": "Polling Interval (minutes)",
+          "temperature_sensor": "Real Temperature Sensor (Optional)",
+          "humidity_sensor": "Real Humidity Sensor (Optional)",
+          "precipitation_sensor": "Real Precipitation Sensor (Optional)",
+          "wind_speed_sensor": "Real Wind Speed Sensor (Optional)"
         }
       }
     },
@@ -22,10 +26,14 @@
     "step": {
       "init": {
         "title": "Forecast Fusion Options",
-        "description": "Configure forecast sources and update intervals.",
+        "description": "Configure forecast sources, update intervals, and verification sensors.",
         "data": {
           "sources": "Weather Forecast Entities",
-          "poll_interval_minutes": "Polling Interval (minutes)"
+          "poll_interval_minutes": "Polling Interval (minutes)",
+          "temperature_sensor": "Real Temperature Sensor (Optional)",
+          "humidity_sensor": "Real Humidity Sensor (Optional)",
+          "precipitation_sensor": "Real Precipitation Sensor (Optional)",
+          "wind_speed_sensor": "Real Wind Speed Sensor (Optional)"
         }
       }
     },

@@ -3,11 +3,15 @@
     "step": {
       "user": {
         "title": "Konfiguracja Forecast Fusion & Personal Comfort",
-        "description": "Wybierz encje prognozy pogody do łączenia i ewaluacji.",
+        "description": "Wybierz encje prognozy pogody oraz opcjonalne czujniki weryfikujące prawdziwą pogodę.",
         "data": {
           "name": "Nazwa integracji",
           "sources": "Encje prognozy pogody",
-          "poll_interval_minutes": "Interwał pobierania (minuty)"
+          "poll_interval_minutes": "Interwał pobierania (minuty)",
+          "temperature_sensor": "Czujnik temperatury rzeczywistej (opcjonalny)",
+          "humidity_sensor": "Czujnik wilgotności rzeczywistej (opcjonalny)",
+          "precipitation_sensor": "Czujnik opadów rzeczywistych (opcjonalny)",
+          "wind_speed_sensor": "Czujnik prędkości wiatru (opcjonalny)"
         }
       }
     },
@@ -22,10 +26,14 @@
     "step": {
       "init": {
         "title": "Opcje Forecast Fusion",
-        "description": "Konfiguracja źródeł prognozy i interwałów odświeżania.",
+        "description": "Konfiguracja źródeł prognozy, interwałów i czujników weryfikujących.",
         "data": {
           "sources": "Encje prognozy pogody",
-          "poll_interval_minutes": "Interwał pobierania (minuty)"
+          "poll_interval_minutes": "Interwał pobierania (minuty)",
+          "temperature_sensor": "Czujnik temperatury rzeczywistej (opcjonalny)",
+          "humidity_sensor": "Czujnik wilgotności rzeczywistej (opcjonalny)",
+          "precipitation_sensor": "Czujnik opadów rzeczywistych (opcjonalny)",
+          "wind_speed_sensor": "Czujnik prędkości wiatru (opcjonalny)"
         }
       }
     },
