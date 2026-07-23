@@ -3,7 +3,6 @@
 import logging
 from typing import Any
 
-from homeassistant.components import frontend
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
@@ -11,6 +10,7 @@ from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from .api.websocket import async_register_websocket_api
 from .const import DOMAIN
 from .coordinator import ForecastFusionCoordinator, ForecastFusionRuntimeData
+from .frontend import async_register_panel, async_unregister_panel
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,52 +28,8 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     hass.data.setdefault(DOMAIN, {})
     async_register_websocket_api(hass)
 
-    # Safely register static path for frontend JS panel if HTTP server is initialized
-    if getattr(hass, "http", None) is not None:
-        frontend_path = hass.config.path("custom_components/forecast_fusion/frontend")
-        if hasattr(hass.http, "async_register_static_paths"):
-            try:
-                from homeassistant.components.http import StaticPathConfig
-
-                await hass.http.async_register_static_paths(
-                    [
-                        StaticPathConfig(
-                            url_path="/forecast_fusion_panel",
-                            path=frontend_path,
-                            cache_headers=False,
-                        )
-                    ]
-                )
-            except Exception as err:
-                _LOGGER.debug("Could not async_register_static_paths: %s", err)
-        elif hasattr(hass.http, "register_static_path"):
-            try:
-                hass.http.register_static_path(  # type: ignore[union-attr]
-                    "/forecast_fusion_panel", frontend_path, cache_headers=False
-                )
-            except Exception as err:
-                _LOGGER.debug("Could not register_static_path: %s", err)
-
-    # Safely register sidebar panel
-    try:
-        frontend.async_register_built_in_panel(  # type: ignore[call-arg]
-            hass,
-            component_name="custom",
-            sidebar_title="Forecast Fusion",
-            sidebar_icon="mdi:weather-forecast-stat",
-            url_path="forecast_fusion",
-            config={
-                "_panel_custom": {
-                    "name": "forecast-fusion-panel",
-                    "embed_iframe": False,
-                    "trust_external": False,
-                    "js_url": "/forecast_fusion_panel/forecast-fusion-panel.js",
-                }
-            },
-            require_admin=False,
-        )
-    except Exception as err:
-        _LOGGER.debug("Could not register built-in sidebar panel: %s", err)
+    # Register sidebar panel and static path
+    await async_register_panel(hass)
 
     async def handle_refresh(call: ServiceCall) -> None:
         """Handle refresh service call."""
@@ -136,6 +92,8 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Forecast Fusion from a config entry."""
+    await async_register_panel(hass)
+
     coordinator = ForecastFusionCoordinator(hass, entry)
     if entry.state == ConfigEntryState.SETUP_IN_PROGRESS:
         await coordinator.async_config_entry_first_refresh()
@@ -153,6 +111,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        entries = hass.config_entries.async_entries(DOMAIN)
+        loaded_entries = [
+            e
+            for e in entries
+            if e.state == ConfigEntryState.LOADED and e.entry_id != entry.entry_id
+        ]
+        if not loaded_entries:
+            await async_unregister_panel(hass)
     return bool(unload_ok)
 
 
