@@ -1,0 +1,11 @@
+{
+  "domain": "forecast_fusion",
+  "name": "Forecast Fusion & Personal Comfort",
+  "codeowners": ["@andrzejf1994"],
+  "dependencies": [],
+  "documentation": "https://github.com/andrzejf1994/HA-Forecast-Advisor/blob/main/README.md",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "requirements": [],
+  "version": "0.0.2"
+}   

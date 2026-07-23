@@ -13,6 +13,7 @@ CONF_INCLUDED_FIELDS: Final[str] = "included_fields"
 CONF_RETENTION: Final[str] = "retention"
 CONF_OBSERVATIONS: Final[str] = "observations"
 CONF_FUSION_ALGORITHM: Final[str] = "fusion_algorithm"
+CONF_VERIFICATION_SENSORS: Final[str] = "verification_sensors"
 
 # Defaults
 DEFAULT_POLL_INTERVAL_MINUTES: Final[int] = 30

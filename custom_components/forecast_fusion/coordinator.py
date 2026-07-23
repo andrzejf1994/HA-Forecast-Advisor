@@ -1,15 +1,18 @@
 """DataUpdateCoordinator for Forecast Fusion."""
 
 import logging
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import CONF_FUSION_ALGORITHM, CONF_SOURCES, DOMAIN
+from .const import CONF_FUSION_ALGORITHM, CONF_SOURCES, CONF_VERIFICATION_SENSORS, DOMAIN
+from .core.enums import WeatherParameter
 from .core.fusion import fuse_forecasts
 from .core.models import ForecastPoint, FusedForecastPoint
+from .managers.feedback_manager import FeedbackManager
+from .managers.observation_manager import ObservationManager
 from .managers.source_manager import SourceManager
 from .repositories.sqlite import SQLiteRepository
 
@@ -37,13 +40,15 @@ class ForecastFusionCoordinator(DataUpdateCoordinator[list[FusedForecastPoint]])
             update_interval=timedelta(minutes=15),
         )
         self.entry = entry
-        self.sources: list[str] = entry.data.get(CONF_SOURCES, [])
+        self.sources: list[str] = entry.options.get(CONF_SOURCES, entry.data.get(CONF_SOURCES, []))
         self.algorithm: str = entry.options.get(CONF_FUSION_ALGORITHM, "weighted_median")
 
         db_path = hass.config.path(f"{DOMAIN}.db")
         self.repo = SQLiteRepository(db_path)
 
         self.source_manager = SourceManager(hass)
+        self.observation_manager = ObservationManager(hass, self.repo)
+        self.feedback_manager = FeedbackManager(self.repo)
         self.fused_forecast: list[FusedForecastPoint] = []
 
     @property
@@ -53,9 +58,36 @@ class ForecastFusionCoordinator(DataUpdateCoordinator[list[FusedForecastPoint]])
             return 1.0
         return sum(p.overall_confidence for p in self.fused_forecast) / len(self.fused_forecast)
 
+    async def _sample_verification_sensors(self) -> None:
+        """Sample configured ground-truth verification sensors."""
+        verification_sensors: dict[str, str] = self.entry.options.get(CONF_VERIFICATION_SENSORS, {})
+        now = datetime.now(UTC)
+        start_at = now - timedelta(minutes=15)
+
+        param_map = {
+            "temperature": WeatherParameter.TEMPERATURE,
+            "humidity": WeatherParameter.HUMIDITY,
+            "precipitation": WeatherParameter.PRECIPITATION,
+            "wind_speed": WeatherParameter.WIND_SPEED,
+        }
+
+        for param_key, param_enum in param_map.items():
+            sensor_entity_id = verification_sensors.get(param_key)
+            if sensor_entity_id:
+                await self.observation_manager.record_entity_observation(
+                    parameter=param_enum,
+                    entity_id=sensor_entity_id,
+                    start_at=start_at,
+                    end_at=now,
+                )
+
     async def _async_update_data(self) -> list[FusedForecastPoint]:
-        """Fetch forecasts from sources and fuse them."""
+        """Fetch forecasts from sources, sample verification sensors, and fuse forecasts."""
         try:
+            # Refresh sources list from options or data
+            self.sources = self.entry.options.get(
+                CONF_SOURCES, self.entry.data.get(CONF_SOURCES, [])
+            )
             sources_list = [{"id": s, "entity_id": s} for s in self.sources]
             snapshots_dict = await self.source_manager.async_fetch_all_sources(sources_list)
 
@@ -65,6 +97,10 @@ class ForecastFusionCoordinator(DataUpdateCoordinator[list[FusedForecastPoint]])
 
             fused = fuse_forecasts(all_points, algorithm=self.algorithm)
             self.fused_forecast = fused
+
+            # Sample ground-truth verification sensors
+            await self._sample_verification_sensors()
+
             return fused
         except Exception as err:
             _LOGGER.exception("Error updating forecast fusion: %s", err)

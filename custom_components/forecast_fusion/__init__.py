@@ -3,7 +3,8 @@
 import logging
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components import frontend
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 
@@ -23,9 +24,37 @@ PLATFORMS: list[Platform] = [
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
-    """Set up the Forecast Fusion component."""
+    """Set up the Forecast Fusion component and sidebar panel."""
     hass.data.setdefault(DOMAIN, {})
     async_register_websocket_api(hass)
+
+    # Safely register static path for frontend JS panel if HTTP server is initialized
+    if getattr(hass, "http", None) is not None:
+        frontend_path = hass.config.path("custom_components/forecast_fusion/frontend")
+        hass.http.register_static_path(  # type: ignore[union-attr]
+            "/forecast_fusion_panel", frontend_path, cache_headers=False
+        )
+
+    # Safely register sidebar panel
+    try:
+        frontend.async_register_built_in_panel(  # type: ignore[call-arg]
+            hass,
+            component_name="custom",
+            sidebar_title="Forecast Fusion",
+            sidebar_icon="mdi:weather-forecast-stat",
+            url_path="forecast_fusion",
+            config={
+                "_panel_custom": {
+                    "name": "forecast-fusion-panel",
+                    "embed_iframe": False,
+                    "trust_external": False,
+                    "js_url": "/forecast_fusion_panel/forecast-fusion-panel.js",
+                }
+            },
+            require_admin=False,
+        )
+    except Exception as err:
+        _LOGGER.debug("Could not register built-in sidebar panel: %s", err)
 
     async def handle_refresh(call: ServiceCall) -> None:
         """Handle refresh service call."""
@@ -89,7 +118,10 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Forecast Fusion from a config entry."""
     coordinator = ForecastFusionCoordinator(hass, entry)
-    await coordinator.async_config_entry_first_refresh()
+    if entry.state == ConfigEntryState.SETUP_IN_PROGRESS:
+        await coordinator.async_config_entry_first_refresh()
+    else:
+        await coordinator.async_refresh()
 
     entry.runtime_data = ForecastFusionRuntimeData(coordinator=coordinator)
 
