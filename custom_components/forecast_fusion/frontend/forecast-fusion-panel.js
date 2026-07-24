@@ -3,6 +3,7 @@ class ForecastFusionPanel extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
     this.activeTab = 'forecast';
+    this.radarSource = 'rainviewer'; // 'rainviewer' | 'blitzortung'
     this.timeMode = 'hour'; // 'hour' | 'day' | 'range'
     this.data = null;
     this.historyData = null;
@@ -81,6 +82,11 @@ class ForecastFusionPanel extends HTMLElement {
 
   switchTab(tab) {
     this.activeTab = tab;
+    this.render();
+  }
+
+  setRadarSource(source) {
+    this.radarSource = source;
     this.render();
   }
 
@@ -410,7 +416,7 @@ class ForecastFusionPanel extends HTMLElement {
           📊 Prognoza
         </button>
         <button class="tab-btn ${this.activeTab === 'radar' ? 'active' : ''}" id="tab-radar">
-          🌧️ Radar Opadów
+          🌧️ Radar & Burze
         </button>
         <button class="tab-btn ${this.activeTab === 'feedback' ? 'active' : ''}" id="tab-feedback">
           ✍️ Ocena i Ubiór
@@ -626,7 +632,7 @@ class ForecastFusionPanel extends HTMLElement {
                   <span style="font-size: 20px;">⚡</span>
                   <div>
                     <strong style="color: #fef08a;">Ostrzeżenie przed burzą / wyładowaniami atmosferycznymi!</strong>
-                    <div style="font-weight: 400; font-size: 13px; margin-top: 2px;">Prognoza wskazuje na ryzyko wystąpienia lokalnych burz i wyładowań. Zalecamy zabezpieczenie urządzeń i obserwację radaru opadów.</div>
+                    <div style="font-weight: 400; font-size: 13px; margin-top: 2px;">Prognoza wskazuje na ryzyko wystąpienia lokalnych burz i wyładowań. Zalecamy zabezpieczenie urządzeń i obserwację radaru opadów i mapy burz.</div>
                   </div>
                 </div>
               `
@@ -677,26 +683,58 @@ class ForecastFusionPanel extends HTMLElement {
     if (this.activeTab === 'radar') {
       return `
         <div class="card">
-          <h2>🌧️ Interaktywny Radar Opadów (Weather Radar)</h2>
+          <h2>🌧️ Weather Radar & ⚡ Blitzortung Live Lightning Map</h2>
           <p style="font-size: 13px; color: #94a3b8; margin-bottom: 16px;">
-            Animowana mapa radarowa opadów atmosferycznych w czasie rzeczywistym z wycentrowaniem na Twoją lokalizację w Home Assistant (${lat.toFixed(2)}°, ${lon.toFixed(2)}°).
+            Wybierz źródło podglądu w czasie rzeczywistym z wycentrowaniem na Twoje położenie (${lat.toFixed(2)}°, ${lon.toFixed(2)}°).
           </p>
 
-          <div class="radar-legend">
-            <span style="color:#cbd5e1; font-weight:600;">Intensywność Opadu:</span>
-            <span>Mżawka</span>
-            <div class="radar-legend-bar"></div>
-            <span>Ulewa / Grad</span>
+          <div class="mode-selector" style="margin-bottom: 16px;">
+            <button type="button" class="mode-btn ${this.radarSource === 'rainviewer' ? 'active' : ''}" id="radar-src-rainviewer">
+              🌧️ Radar Opadów (RainViewer)
+            </button>
+            <button type="button" class="mode-btn ${this.radarSource === 'blitzortung' ? 'active' : ''}" id="radar-src-blitzortung">
+              ⚡ Mapa Burz & Wyładowań (Blitzortung.org)
+            </button>
           </div>
 
-          <div style="border-radius: 12px; overflow: hidden; border: 1px solid #334155; background: #0f172a; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);">
-            <iframe
-              src="https://www.rainviewer.com/map.html?loc=${lat},${lon},${zoom}&o=83&c=1&o=83&layer=radar&sm=1&sn=1"
-              style="width: 100%; height: 580px; border: none;"
-              allowfullscreen
-              loading="lazy">
-            </iframe>
-          </div>
+          ${
+            this.radarSource === 'rainviewer'
+              ? `
+                <div class="radar-legend">
+                  <span style="color:#cbd5e1; font-weight:600;">Intensywność Opadu:</span>
+                  <span>Mżawka</span>
+                  <div class="radar-legend-bar"></div>
+                  <span>Ulewa / Grad</span>
+                </div>
+
+                <div style="border-radius: 12px; overflow: hidden; border: 1px solid #334155; background: #0f172a; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);">
+                  <iframe
+                    src="https://www.rainviewer.com/map.html?loc=${lat},${lon},${zoom}&o=83&c=1&o=83&layer=radar&sm=1&sn=1"
+                    style="width: 100%; height: 580px; border: none;"
+                    allowfullscreen
+                    loading="lazy">
+                  </iframe>
+                </div>
+              `
+              : `
+                <div class="radar-legend" style="gap: 16px;">
+                  <span style="color:#cbd5e1; font-weight:600;">Wiek Wyładowania:</span>
+                  <span style="color:#ef4444; font-weight:700;">● &lt;15 min</span>
+                  <span style="color:#eab308; font-weight:700;">● &lt;30 min</span>
+                  <span style="color:#22c55e; font-weight:700;">● &lt;45 min</span>
+                  <span style="color:#3b82f6; font-weight:700;">● &lt;60 min</span>
+                </div>
+
+                <div style="border-radius: 12px; overflow: hidden; border: 1px solid #334155; background: #0f172a; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);">
+                  <iframe
+                    src="https://map.blitzortung.org/#${zoom}/${lat.toFixed(4)}/${lon.toFixed(4)}"
+                    style="width: 100%; height: 580px; border: none;"
+                    allowfullscreen
+                    loading="lazy">
+                  </iframe>
+                </div>
+              `
+          }
         </div>
       `;
     }
@@ -946,7 +984,7 @@ class ForecastFusionPanel extends HTMLElement {
                             <td style="color:#38bdf8;">${fcPrecip != null ? fcPrecip.toFixed(1) : '-'}</td>
                             <td>${fcWind != null ? fcWind.toFixed(1) : '-'}</td>
                             <td><span class="confidence-badge">${fcCond}</span></td>
-                            <td style="font-weight:700; color:${tempDiff.startsWith('+') ? '#f87171' : tempDiff.startsWith('-') ? '#60a5fa' : '#94a3b8'}">${tempDiff}">${tempDiff}</td>
+                            <td style="font-weight:700; color:${tempDiff.startsWith('+') ? '#f87171' : tempDiff.startsWith('-') ? '#60a5fa' : '#94a3b8'}">${tempDiff}</td>
                           </tr>
                         `;
                       }).join('')
@@ -974,6 +1012,12 @@ class ForecastFusionPanel extends HTMLElement {
     if (tRadar) tRadar.addEventListener('click', () => this.switchTab('radar'));
     if (tFeedback) tFeedback.addEventListener('click', () => this.switchTab('feedback'));
     if (tHistory) tHistory.addEventListener('click', () => this.switchTab('history'));
+
+    // Radar source buttons
+    const rRain = root.getElementById('radar-src-rainviewer');
+    const rBlitz = root.getElementById('radar-src-blitzortung');
+    if (rRain) rRain.addEventListener('click', () => this.setRadarSource('rainviewer'));
+    if (rBlitz) rBlitz.addEventListener('click', () => this.setRadarSource('blitzortung'));
 
     // Mode buttons in feedback
     const mHour = root.getElementById('mode-hour');

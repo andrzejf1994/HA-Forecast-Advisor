@@ -68,24 +68,27 @@ class ForecastFusionStormAlertBinarySensor(ForecastFusionBaseEntity, BinarySenso
 
     @property
     def is_on(self) -> bool:
-        """Return True if a storm/lightning is forecasted or reported by verification sensor."""
-        # 1. Check if custom storm verification sensor (e.g. Burze.dzis.net) reports storm/lightning
+        """Return True if a storm/lightning is forecasted or reported by verification sensors."""
+        # 1. Check custom verification sensors (lightning e.g. Blitzortung and storm e.g. Burze.dzis.net)
         verification_sensors: dict[str, str] = self.entry.options.get(
             CONF_VERIFICATION_SENSORS, self.entry.data.get(CONF_VERIFICATION_SENSORS, {})
         )
+        lightning_entity_id = verification_sensors.get("lightning")
         storm_entity_id = verification_sensors.get("storm")
-        if storm_entity_id:
-            st = self.hass.states.get(storm_entity_id)
-            if st and st.state not in ("unknown", "unavailable"):
-                val_str = str(st.state).lower()
-                if val_str in ("on", "true") or "warning" in val_str:
-                    return True
-                try:
-                    dist = float(val_str)
-                    if dist < 30.0:
+
+        for ent_id in (lightning_entity_id, storm_entity_id):
+            if ent_id:
+                st = self.hass.states.get(ent_id)
+                if st and st.state not in ("unknown", "unavailable"):
+                    val_str = str(st.state).lower()
+                    if val_str in ("on", "true") or "warning" in val_str:
                         return True
-                except ValueError:
-                    pass
+                    try:
+                        dist = float(val_str)
+                        if dist < 30.0:
+                            return True
+                    except ValueError:
+                        pass
 
         # 2. Check forecast condition for thunderstorm / lightning
         if not self.coordinator.fused_forecast:

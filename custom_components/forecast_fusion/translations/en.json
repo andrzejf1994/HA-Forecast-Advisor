@@ -14,7 +14,8 @@
           "precipitation_sensor": "Numeric Rain Gauge Sensor (Optional, mm)",
           "precipitation_binary_sensor": "Binary Rain Sensor (Optional, on/off)",
           "wind_speed_sensor": "Real Wind Speed Sensor (Optional)",
-          "storm_sensor": "Storm / Lightning Sensor e.g. Burze.dzis.net (Optional)"
+          "lightning_sensor": "Lightning / Distance Sensor e.g. Blitzortung (Optional)",
+          "storm_sensor": "Storm Alert Sensor e.g. Burze.dzis.net (Optional)"
         }
       }
     },
@@ -39,7 +40,8 @@
           "precipitation_sensor": "Numeric Rain Gauge Sensor (Optional, mm)",
           "precipitation_binary_sensor": "Binary Rain Sensor (Optional, on/off)",
           "wind_speed_sensor": "Real Wind Speed Sensor (Optional)",
-          "storm_sensor": "Storm / Lightning Sensor e.g. Burze.dzis.net (Optional)"
+          "lightning_sensor": "Lightning / Distance Sensor e.g. Blitzortung (Optional)",
+          "storm_sensor": "Storm Alert Sensor e.g. Burze.dzis.net (Optional)"
         }
       }
     },

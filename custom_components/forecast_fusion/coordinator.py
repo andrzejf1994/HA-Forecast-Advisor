@@ -8,9 +8,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import CONF_FUSION_ALGORITHM, CONF_SOURCES, CONF_VERIFICATION_SENSORS, DOMAIN
-from .core.enums import WeatherParameter
+from .core.enums import ForecastType, WeatherParameter
 from .core.fusion import fuse_forecasts
-from .core.models import ForecastPoint, FusedForecastPoint
+from .core.models import ForecastPoint, ForecastSnapshot, FusedForecastPoint
 from .managers.feedback_manager import FeedbackManager
 from .managers.observation_manager import ObservationManager
 from .managers.source_manager import SourceManager
@@ -104,6 +104,76 @@ class ForecastFusionCoordinator(DataUpdateCoordinator[list[FusedForecastPoint]])
 
             fused = fuse_forecasts(all_points, algorithm=self.algorithm)
             self.fused_forecast = fused
+
+            # Save fused forecast as a historical snapshot in SQLite
+            if fused:
+                now = datetime.now(UTC)
+                snap_id = f"fusion_{now.strftime('%Y%m%d%H%M%S')}"
+                fused_points = []
+                for fp in fused:
+                    t_val = (
+                        float(fp.temperature.value)
+                        if isinstance(fp.temperature.value, (int, float))
+                        else None
+                    )
+                    app_val = (
+                        float(fp.apparent_temperature.value)
+                        if isinstance(fp.apparent_temperature.value, (int, float))
+                        else None
+                    )
+                    h_val = (
+                        float(fp.humidity.value)
+                        if isinstance(fp.humidity.value, (int, float))
+                        else None
+                    )
+                    pp_val = (
+                        float(fp.precipitation_probability.value)
+                        if isinstance(fp.precipitation_probability.value, (int, float))
+                        else None
+                    )
+                    pa_val = (
+                        float(fp.precipitation_amount.value)
+                        if isinstance(fp.precipitation_amount.value, (int, float))
+                        else None
+                    )
+                    w_val = (
+                        float(fp.wind_speed.value)
+                        if isinstance(fp.wind_speed.value, (int, float))
+                        else None
+                    )
+                    c_val = str(fp.condition.value) if fp.condition.value else None
+
+                    fused_points.append(
+                        ForecastPoint(
+                            source_id="forecast_fusion",
+                            forecast_type=ForecastType.HOURLY,
+                            fetched_at=now,
+                            issued_at=now,
+                            valid_at=fp.valid_at,
+                            lead_time=fp.valid_at - now if fp.valid_at >= now else timedelta(0),
+                            temperature_c=t_val,
+                            apparent_temperature_c=app_val,
+                            humidity_pct=h_val,
+                            precipitation_probability_pct=pp_val,
+                            precipitation_mm=pa_val,
+                            wind_speed_ms=w_val,
+                            condition=c_val,
+                            raw_hash="fused",
+                        )
+                    )
+
+                fused_snapshot = ForecastSnapshot(
+                    snapshot_id=snap_id,
+                    source_id="forecast_fusion",
+                    fetched_at=now,
+                    forecast_type=ForecastType.HOURLY,
+                    points=tuple(fused_points),
+                    raw_hash="fused",
+                )
+                try:
+                    await self.repo.save_snapshot(fused_snapshot)
+                except Exception as f_err:
+                    _LOGGER.debug("Could not save fused forecast snapshot: %s", f_err)
 
             # Sample ground-truth verification sensors
             await self._sample_verification_sensors()

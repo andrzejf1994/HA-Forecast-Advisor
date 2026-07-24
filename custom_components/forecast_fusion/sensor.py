@@ -58,7 +58,7 @@ class ForecastFusionConfidenceSensor(ForecastFusionBaseEntity, SensorEntity):
 
 
 class ForecastFusionStormRiskSensor(ForecastFusionBaseEntity, SensorEntity):
-    """Sensor evaluating storm and lightning risk (supports Burze.dzis.net integration)."""
+    """Sensor evaluating storm and lightning risk (supports Blitzortung & Burze.dzis.net)."""
 
     _attr_icon = "mdi:flash"
 
@@ -74,17 +74,17 @@ class ForecastFusionStormRiskSensor(ForecastFusionBaseEntity, SensorEntity):
     @property
     def native_value(self) -> str:
         """Return storm risk level: Brak, Niskie, Umiarkowane, Wysokie, Ekstremalne."""
-        # 1. Check if Burze.dzis.net or custom storm verification sensor is configured
+        # 1. Check if dedicated lightning sensor (e.g. Blitzortung distance) or storm sensor is configured
         verification_sensors: dict[str, str] = self.entry.options.get(
             CONF_VERIFICATION_SENSORS, self.entry.data.get(CONF_VERIFICATION_SENSORS, {})
         )
+        lightning_entity_id = verification_sensors.get("lightning")
         storm_entity_id = verification_sensors.get("storm")
-        if storm_entity_id:
-            st = self.hass.states.get(storm_entity_id)
+
+        if lightning_entity_id:
+            st = self.hass.states.get(lightning_entity_id)
             if st and st.state not in ("unknown", "unavailable"):
                 val_str = str(st.state).lower()
-                if val_str in ("on", "true") or "warning" in val_str:
-                    return "Wysokie"
                 try:
                     dist = float(val_str)
                     if dist < 10.0:
@@ -94,9 +94,17 @@ class ForecastFusionStormRiskSensor(ForecastFusionBaseEntity, SensorEntity):
                     if dist < 50.0:
                         return "Umiarkowane"
                 except ValueError:
-                    pass
+                    if val_str in ("on", "true"):
+                        return "Wysokie"
 
-        # 2. Check forecast condition & precip probability / wind gust in fused points
+        if storm_entity_id:
+            st = self.hass.states.get(storm_entity_id)
+            if st and st.state not in ("unknown", "unavailable"):
+                val_str = str(st.state).lower()
+                if val_str in ("on", "true") or "warning" in val_str:
+                    return "Wysokie"
+
+        # 2. Check forecast condition & precip probability in fused points
         if not self.coordinator.fused_forecast:
             return "Brak"
 
@@ -126,16 +134,20 @@ class ForecastFusionStormRiskSensor(ForecastFusionBaseEntity, SensorEntity):
         verification_sensors: dict[str, str] = self.entry.options.get(
             CONF_VERIFICATION_SENSORS, self.entry.data.get(CONF_VERIFICATION_SENSORS, {})
         )
+        lightning_entity_id = verification_sensors.get("lightning")
         storm_entity_id = verification_sensors.get("storm")
-        storm_sensor_state = None
-        if storm_entity_id:
-            st = self.hass.states.get(storm_entity_id)
-            if st:
-                storm_sensor_state = st.state
+
+        l_st = self.hass.states.get(lightning_entity_id) if lightning_entity_id else None
+        s_st = self.hass.states.get(storm_entity_id) if storm_entity_id else None
+
+        l_state = l_st.state if l_st else None
+        s_state = s_st.state if s_st else None
 
         return {
+            "lightning_sensor_entity": lightning_entity_id,
+            "lightning_sensor_state": l_state,
             "storm_sensor_entity": storm_entity_id,
-            "storm_sensor_state": storm_sensor_state,
+            "storm_sensor_state": s_state,
             "fused_points_count": len(self.coordinator.fused_forecast),
         }
 

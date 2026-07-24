@@ -53,6 +53,7 @@ class ForecastFusionConfigFlow(ConfigFlow, domain=DOMAIN):
                     "precipitation",
                     "precipitation_binary",
                     "wind_speed",
+                    "lightning",
                     "storm",
                 ):
                     s_val = user_input.pop(f"{k}_sensor", None)
@@ -97,6 +98,9 @@ class ForecastFusionConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Optional("wind_speed_sensor"): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
+                vol.Optional("lightning_sensor"): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
+                ),
                 vol.Optional("storm_sensor"): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
                 ),
@@ -135,6 +139,7 @@ class ForecastFusionOptionsFlowHandler(OptionsFlow):
                     "precipitation",
                     "precipitation_binary",
                     "wind_speed",
+                    "lightning",
                     "storm",
                 ):
                     s_val = user_input.pop(f"{k}_sensor", None)
@@ -230,6 +235,17 @@ class ForecastFusionOptionsFlowHandler(OptionsFlow):
         else:
             schema_dict[vol.Optional("wind_speed_sensor")] = selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="sensor")
+            )
+
+        if current_verif.get("lightning"):
+            schema_dict[vol.Optional("lightning_sensor", default=current_verif["lightning"])] = (
+                selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
+                )
+            )
+        else:
+            schema_dict[vol.Optional("lightning_sensor")] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
             )
 
         if current_verif.get("storm"):

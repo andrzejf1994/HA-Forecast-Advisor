@@ -190,12 +190,37 @@ async def ws_get_history(hass: HomeAssistant, connection: Any, msg: dict[str, An
 
     try:
         snapshots = await coordinator.repo.query_snapshots()
+        existing_times = {item["valid_at"] for item in fused_summary}
+
+        # 1. Prefer saved fused snapshots (source_id == "forecast_fusion")
+        for snap in snapshots:
+            if snap.source_id == "forecast_fusion":
+                for pt in snap.points:
+                    v_iso = pt.valid_at.isoformat()
+                    if v_iso not in existing_times:
+                        existing_times.add(v_iso)
+                        fused_summary.append(
+                            {
+                                "valid_at": v_iso,
+                                "temperature": pt.temperature_c,
+                                "apparent_temperature": pt.apparent_temperature_c,
+                                "humidity": pt.humidity_pct,
+                                "precipitation_probability": pt.precipitation_probability_pct,
+                                "precipitation_amount": pt.precipitation_mm,
+                                "wind_speed": pt.wind_speed_ms,
+                                "condition": pt.condition,
+                                "overall_confidence": 0.85,
+                            }
+                        )
+
+        # 2. Fallback fuse points from raw source snapshots if needed
         past_points: list[ForecastPoint] = []
         for snap in snapshots:
-            past_points.extend(snap.points)
+            if snap.source_id != "forecast_fusion":
+                past_points.extend(snap.points)
+
         if past_points:
             fused_past = fuse_forecasts(past_points, algorithm=coordinator.algorithm)
-            existing_times = {item["valid_at"] for item in fused_summary}
             for p in fused_past:
                 v_iso = p.valid_at.isoformat()
                 if v_iso not in existing_times:

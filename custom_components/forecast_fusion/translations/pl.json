@@ -14,7 +14,8 @@
           "precipitation_sensor": "Czujnik opadów liczbowy / deszczomierz (opcjonalny, mm)",
           "precipitation_binary_sensor": "Czujnik deszczu binarny (opcjonalny: pada / nie pada)",
           "wind_speed_sensor": "Czujnik prędkości wiatru (opcjonalny)",
-          "storm_sensor": "Czujnik burzowy / wyładowań np. Burze.dzis.net (opcjonalny)"
+          "lightning_sensor": "Czujnik wyładowań / piorunów np. Blitzortung (opcjonalny)",
+          "storm_sensor": "Czujnik ostrzeżeń burzowych np. Burze.dzis.net (opcjonalny)"
         }
       }
     },
@@ -39,7 +40,8 @@
           "precipitation_sensor": "Czujnik opadów liczbowy / deszczomierz (opcjonalny, mm)",
           "precipitation_binary_sensor": "Czujnik deszczu binarny (opcjonalny: pada / nie pada)",
           "wind_speed_sensor": "Czujnik prędkości wiatru (opcjonalny)",
-          "storm_sensor": "Czujnik burzowy / wyładowań np. Burze.dzis.net (opcjonalny)"
+          "lightning_sensor": "Czujnik wyładowań / piorunów np. Blitzortung (opcjonalny)",
+          "storm_sensor": "Czujnik ostrzeżeń burzowych np. Burze.dzis.net (opcjonalny)"
         }
       }
     },
