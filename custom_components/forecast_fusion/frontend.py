@@ -107,7 +107,7 @@ async def async_register_panel(hass: HomeAssistant) -> bool:
             hass,
             component_name="custom",
             sidebar_title="Forecast Fusion",
-            sidebar_icon="mdi:weather-forecast-stat",
+            sidebar_icon="mdi:weather-partly-cloudy",
             frontend_url_path=PANEL_URL_PATH,
             config={
                 "_panel_custom": {

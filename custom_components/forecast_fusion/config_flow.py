@@ -47,7 +47,14 @@ class ForecastFusionConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "no_sources"
             else:
                 verif_sensors = {}
-                for k in ("temperature", "humidity", "precipitation", "wind_speed"):
+                for k in (
+                    "temperature",
+                    "humidity",
+                    "precipitation",
+                    "precipitation_binary",
+                    "wind_speed",
+                    "storm",
+                ):
                     s_val = user_input.pop(f"{k}_sensor", None)
                     if s_val:
                         verif_sensors[k] = s_val
@@ -84,8 +91,14 @@ class ForecastFusionConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Optional("precipitation_sensor"): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
+                vol.Optional("precipitation_binary_sensor"): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="binary_sensor")
+                ),
                 vol.Optional("wind_speed_sensor"): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
+                ),
+                vol.Optional("storm_sensor"): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
                 ),
             }
         )
@@ -116,7 +129,14 @@ class ForecastFusionOptionsFlowHandler(OptionsFlow):
                 errors["base"] = "no_sources"
             else:
                 verif_sensors = {}
-                for k in ("temperature", "humidity", "precipitation", "wind_speed"):
+                for k in (
+                    "temperature",
+                    "humidity",
+                    "precipitation",
+                    "precipitation_binary",
+                    "wind_speed",
+                    "storm",
+                ):
                     s_val = user_input.pop(f"{k}_sensor", None)
                     if s_val:
                         verif_sensors[k] = s_val
@@ -192,6 +212,17 @@ class ForecastFusionOptionsFlowHandler(OptionsFlow):
                 selector.EntitySelectorConfig(domain="sensor")
             )
 
+        if current_verif.get("precipitation_binary"):
+            schema_dict[
+                vol.Optional(
+                    "precipitation_binary_sensor", default=current_verif["precipitation_binary"]
+                )
+            ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor"))
+        else:
+            schema_dict[vol.Optional("precipitation_binary_sensor")] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="binary_sensor")
+            )
+
         if current_verif.get("wind_speed"):
             schema_dict[vol.Optional("wind_speed_sensor", default=current_verif["wind_speed"])] = (
                 selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
@@ -199,6 +230,17 @@ class ForecastFusionOptionsFlowHandler(OptionsFlow):
         else:
             schema_dict[vol.Optional("wind_speed_sensor")] = selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="sensor")
+            )
+
+        if current_verif.get("storm"):
+            schema_dict[vol.Optional("storm_sensor", default=current_verif["storm"])] = (
+                selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
+                )
+            )
+        else:
+            schema_dict[vol.Optional("storm_sensor")] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["sensor", "binary_sensor"])
             )
 
         return self.async_show_form(

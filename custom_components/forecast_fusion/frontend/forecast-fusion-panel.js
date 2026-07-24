@@ -30,7 +30,7 @@ class ForecastFusionPanel extends HTMLElement {
     this.render();
 
     try {
-      // Fetch overview data directly via WS API (backend automatically resolves active entry)
+      // Fetch overview data directly via WS API
       const res = await this._hass.callWS({
         type: 'forecast_fusion/get_overview'
       });
@@ -92,9 +92,12 @@ class ForecastFusionPanel extends HTMLElement {
   render() {
     const lastSuccess = this.data ? this.data.last_update_success : false;
     const points = (this.data && this.data.fused_points) ? this.data.fused_points : [];
-    const sensors = (this.data && this.data.verification_sensors) ? this.data.verification_sensors : {};
     const historyObs = (this.historyData && this.historyData.recent_observations) ? this.historyData.recent_observations : [];
     const historyFused = (this.historyData && this.historyData.fused_points) ? this.historyData.fused_points : (this.data && this.data.fused_points ? this.data.fused_points : []);
+
+    const lat = (this.data && this.data.latitude != null) ? this.data.latitude : (this._hass && this._hass.config ? this._hass.config.latitude : 52.23);
+    const lon = (this.data && this.data.longitude != null) ? this.data.longitude : (this._hass && this._hass.config ? this._hass.config.longitude : 21.01);
+    const zoom = (this.data && this.data.radar_zoom != null) ? this.data.radar_zoom : 8;
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -356,6 +359,36 @@ class ForecastFusionPanel extends HTMLElement {
           border-radius: 8px;
           margin-bottom: 20px;
         }
+
+        .info-box {
+          background: rgba(56, 189, 248, 0.1);
+          border: 1px solid rgba(56, 189, 248, 0.3);
+          color: #7dd3fc;
+          padding: 12px 16px;
+          border-radius: 8px;
+          font-size: 13px;
+          margin-bottom: 20px;
+        }
+
+        /* Radar Legend Bar */
+        .radar-legend {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          background: #0f172a;
+          padding: 10px 16px;
+          border-radius: 10px;
+          border: 1px solid #334155;
+          margin-bottom: 16px;
+          font-size: 12px;
+        }
+
+        .radar-legend-bar {
+          height: 12px;
+          flex: 1;
+          border-radius: 6px;
+          background: linear-gradient(90deg, #0000ff 0%, #00ffff 25%, #00ff00 50%, #ffff00 75%, #ff0000 100%);
+        }
       </style>
 
       <div class="header-container">
@@ -374,16 +407,16 @@ class ForecastFusionPanel extends HTMLElement {
 
       <div class="tab-bar">
         <button class="tab-btn ${this.activeTab === 'forecast' ? 'active' : ''}" id="tab-forecast">
-          📊 Prognozy i Fuzja
+          📊 Prognoza
+        </button>
+        <button class="tab-btn ${this.activeTab === 'radar' ? 'active' : ''}" id="tab-radar">
+          🌧️ Radar Opadów
         </button>
         <button class="tab-btn ${this.activeTab === 'feedback' ? 'active' : ''}" id="tab-feedback">
           ✍️ Ocena i Ubiór
         </button>
         <button class="tab-btn ${this.activeTab === 'history' ? 'active' : ''}" id="tab-history">
           📜 Dane Historyczne
-        </button>
-        <button class="tab-btn ${this.activeTab === 'sensors' ? 'active' : ''}" id="tab-sensors">
-          🌡️ Czujniki Weryfikujące
         </button>
       </div>
 
@@ -392,23 +425,217 @@ class ForecastFusionPanel extends HTMLElement {
       ${
         this.loading
           ? `<div class="loading-spinner">⏳ Ładowanie danych z Forecast Fusion...</div>`
-          : this.renderTabContent(points, sensors, historyObs, historyFused)
+          : this.renderTabContent(points, historyObs, historyFused, lat, lon, zoom)
       }
     `;
 
     this.bindEvents();
   }
 
-  renderTabContent(points, sensors, historyObs, historyFused) {
+  renderForecastChart(points) {
+    if (!points || points.length === 0) return '';
+
+    const chartPoints = points.slice(0, 24);
+    const width = 800;
+    const height = 220;
+    const padding = { top: 40, right: 30, bottom: 40, left: 40 };
+
+    const temps = chartPoints.map(p => p.temperature != null ? p.temperature : 0);
+    const minTemp = Math.floor(Math.min(...temps) - 2);
+    const maxTemp = Math.ceil(Math.max(...temps) + 2);
+    const tempRange = (maxTemp - minTemp) || 1;
+
+    const getX = (idx) => padding.left + (idx * (width - padding.left - padding.right) / Math.max(1, chartPoints.length - 1));
+    const getY = (temp) => height - padding.bottom - ((temp - minTemp) * (height - padding.top - padding.bottom) / tempRange);
+
+    const pointsCoords = chartPoints.map((p, idx) => ({
+      x: getX(idx),
+      y: getY(p.temperature != null ? p.temperature : minTemp),
+      temp: p.temperature,
+      appTemp: p.apparent_temperature,
+      precip: p.precipitation_probability,
+      cond: p.condition,
+      timeStr: new Date(p.valid_at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })
+    }));
+
+    const lineD = pointsCoords.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`).join(' ');
+    const areaD = `${lineD} L ${pointsCoords[pointsCoords.length - 1].x.toFixed(1)} ${height - padding.bottom} L ${pointsCoords[0].x.toFixed(1)} ${height - padding.bottom} Z`;
+
+    const getCondEmoji = (cond) => {
+      if (!cond) return '🌤️';
+      const c = cond.toLowerCase();
+      if (c.includes('rain') || c.includes('drizzle')) return '🌧️';
+      if (c.includes('snow')) return '❄️';
+      if (c.includes('lightning') || c.includes('thunder')) return '🌩️';
+      if (c.includes('clear') || c.includes('sunny')) return '☀️';
+      if (c.includes('cloudy') || c.includes('overcast')) return '☁️';
+      if (c.includes('fog')) return '🌫️';
+      return '⛅';
+    };
+
+    return `
+      <div style="background:#0f172a; border:1px solid #334155; border-radius:12px; padding:16px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <span style="font-weight:700; font-size:14px; color:#f8fafc;">📈 Wykres Prognozy Pogody (24h)</span>
+          <span style="font-size:12px; color:#94a3b8;">
+            <span style="color:#38bdf8;">━ Temp (°C)</span> &nbsp;|&nbsp;
+            <span style="color:#38bdf8; opacity:0.3;">█ Prawdopodobieństwo opadu (%)</span>
+          </span>
+        </div>
+        <div style="overflow-x:auto;">
+          <svg viewBox="0 0 ${width} ${height}" style="width:100%; min-width:600px; height:auto; overflow:visible;">
+            <defs>
+              <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.35"/>
+                <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
+              </linearGradient>
+            </defs>
+
+            <!-- Grid Lines -->
+            <line x1="${padding.left}" y1="${getY(minTemp)}" x2="${width - padding.right}" y2="${getY(minTemp)}" stroke="#334155" stroke-dasharray="2 2"/>
+            <line x1="${padding.left}" y1="${getY(maxTemp)}" x2="${width - padding.right}" y2="${getY(maxTemp)}" stroke="#334155" stroke-dasharray="2 2"/>
+
+            <!-- Precip Bars -->
+            ${pointsCoords.map(c => {
+              const pPct = c.precip != null ? c.precip : 0;
+              const barHeight = (pPct / 100) * 50;
+              return `
+                <rect x="${c.x - 8}" y="${height - padding.bottom - barHeight}" width="16" height="${barHeight}" fill="#38bdf8" opacity="0.25" rx="3"/>
+              `;
+            }).join('')}
+
+            <!-- Temp Gradient Fill & Line -->
+            <path d="${areaD}" fill="url(#tempGradient)"/>
+            <path d="${lineD}" stroke="#38bdf8" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+            <!-- Points, Values & Condition Emojis -->
+            ${pointsCoords.map(c => `
+              <g class="chart-node">
+                <circle cx="${c.x}" cy="${c.y}" r="5" fill="#38bdf8" stroke="#0f172a" stroke-width="2"/>
+                <text x="${c.x}" y="${c.y - 12}" fill="#f8fafc" font-size="11" font-weight="700" text-anchor="middle">${c.temp != null ? c.temp.toFixed(1) : ''}°</text>
+                <text x="${c.x}" y="${c.y - 26}" font-size="14" text-anchor="middle">${getCondEmoji(c.cond)}</text>
+                <text x="${c.x}" y="${height - padding.bottom + 18}" fill="#94a3b8" font-size="11" text-anchor="middle">${c.timeStr}</text>
+              </g>
+            `).join('')}
+          </svg>
+        </div>
+      </div>
+    `;
+  }
+
+  renderHistoryChart(groupedRows) {
+    if (!groupedRows || groupedRows.length === 0) return '';
+
+    const chartRows = groupedRows.slice(0, 24).reverse();
+    if (chartRows.length === 0) return '';
+
+    const width = 800;
+    const height = 220;
+    const padding = { top: 30, right: 30, bottom: 40, left: 40 };
+
+    const allTemps = [];
+    chartRows.forEach(r => {
+      if (r.obs.temperature != null) allTemps.push(parseFloat(r.obs.temperature));
+      if (r.forecast && r.forecast.temperature != null) allTemps.push(r.forecast.temperature);
+    });
+
+    if (allTemps.length === 0) return '';
+
+    const minTemp = Math.floor(Math.min(...allTemps) - 2);
+    const maxTemp = Math.ceil(Math.max(...allTemps) + 2);
+    const tempRange = (maxTemp - minTemp) || 1;
+
+    const getX = (idx) => padding.left + (idx * (width - padding.left - padding.right) / Math.max(1, chartRows.length - 1));
+    const getY = (temp) => height - padding.bottom - ((temp - minTemp) * (height - padding.top - padding.bottom) / tempRange);
+
+    const obsCoords = [];
+    const fcCoords = [];
+
+    chartRows.forEach((r, idx) => {
+      const x = getX(idx);
+      const timeStr = new Date(r.timeKey).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+
+      if (r.obs.temperature != null) {
+        obsCoords.push({ x, y: getY(parseFloat(r.obs.temperature)), val: parseFloat(r.obs.temperature), timeStr });
+      }
+      if (r.forecast && r.forecast.temperature != null) {
+        fcCoords.push({ x, y: getY(r.forecast.temperature), val: r.forecast.temperature, timeStr });
+      }
+    });
+
+    const obsLineD = obsCoords.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`).join(' ');
+    const fcLineD = fcCoords.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`).join(' ');
+
+    return `
+      <div style="background:#0f172a; border:1px solid #334155; border-radius:12px; padding:16px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <span style="font-weight:700; font-size:14px; color:#f8fafc;">📊 Wykres Porównawczy: Temp Rzeczywista vs Prognozowana</span>
+          <span style="font-size:12px; color:#94a3b8;">
+            <span style="color:#60a5fa;">━ Rzeczywistość (Sensor)</span> &nbsp;|&nbsp;
+            <span style="color:#818cf8;">┅┅ Prognoza (Fusion)</span>
+          </span>
+        </div>
+        <div style="overflow-x:auto;">
+          <svg viewBox="0 0 ${width} ${height}" style="width:100%; min-width:600px; height:auto; overflow:visible;">
+            <!-- Grid Lines -->
+            <line x1="${padding.left}" y1="${getY(minTemp)}" x2="${width - padding.right}" y2="${getY(minTemp)}" stroke="#334155" stroke-dasharray="2 2"/>
+            <line x1="${padding.left}" y1="${getY(maxTemp)}" x2="${width - padding.right}" y2="${getY(maxTemp)}" stroke="#334155" stroke-dasharray="2 2"/>
+
+            <!-- Fused Forecast Line -->
+            ${fcLineD ? `<path d="${fcLineD}" stroke="#818cf8" stroke-width="2.5" stroke-dasharray="4 4" fill="none"/>` : ''}
+
+            <!-- Observed Line -->
+            ${obsLineD ? `<path d="${obsLineD}" stroke="#60a5fa" stroke-width="3" fill="none" stroke-linecap="round"/>` : ''}
+
+            <!-- Fused Forecast Nodes -->
+            ${fcCoords.map(c => `
+              <circle cx="${c.x}" cy="${c.y}" r="4" fill="#818cf8"/>
+            `).join('')}
+
+            <!-- Observed Nodes & Time Labels -->
+            ${obsCoords.map(c => `
+              <g>
+                <circle cx="${c.x}" cy="${c.y}" r="5" fill="#60a5fa" stroke="#0f172a" stroke-width="2"/>
+                <text x="${c.x}" y="${c.y - 10}" fill="#60a5fa" font-size="11" font-weight="700" text-anchor="middle">${c.val.toFixed(1)}°</text>
+                <text x="${c.x}" y="${height - padding.bottom + 18}" fill="#94a3b8" font-size="11" text-anchor="middle">${c.timeStr}</text>
+              </g>
+            `).join('')}
+          </svg>
+        </div>
+      </div>
+    `;
+  }
+
+  renderTabContent(points, historyObs, historyFused, lat, lon, zoom) {
     if (this.activeTab === 'forecast') {
+      const isStormAlert = points.some(p => p.condition && (p.condition.toLowerCase().includes('lightning') || p.condition.toLowerCase().includes('thunder') || p.condition.toLowerCase().includes('storm')));
+
       return `
         <div class="card">
-          <h2>Zagregowana Prognoza Pogody (Fusion Output)</h2>
+          <h2>Prognoza Pogody (Fusion Output)</h2>
           <p style="font-size: 13px; color: #94a3b8; margin-bottom: 16px;">
             Wynik fuzji z uwzględnieniem ważonej mediany oraz odporności na wartości odstające z ${
               this.data ? (this.data.sources || []).length : 0
             } źródeł pogodowych.
           </p>
+
+          ${
+            isStormAlert
+              ? `
+                <div style="background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.5); color: #fde047; padding: 14px; border-radius: 12px; margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 10px;">
+                  <span style="font-size: 20px;">⚡</span>
+                  <div>
+                    <strong style="color: #fef08a;">Ostrzeżenie przed burzą / wyładowaniami atmosferycznymi!</strong>
+                    <div style="font-weight: 400; font-size: 13px; margin-top: 2px;">Prognoza wskazuje na ryzyko wystąpienia lokalnych burz i wyładowań. Zalecamy zabezpieczenie urządzeń i obserwację radaru opadów.</div>
+                  </div>
+                </div>
+              `
+              : ''
+          }
+
+          <!-- Graficzne przedstawienie prognozy na wzór weather-chart-card -->
+          ${this.renderForecastChart(points)}
+
           <div class="table-responsive">
             <table>
               <thead>
@@ -442,6 +669,33 @@ class ForecastFusionPanel extends HTMLElement {
                 }
               </tbody>
             </table>
+          </div>
+        </div>
+      `;
+    }
+
+    if (this.activeTab === 'radar') {
+      return `
+        <div class="card">
+          <h2>🌧️ Interaktywny Radar Opadów (Weather Radar)</h2>
+          <p style="font-size: 13px; color: #94a3b8; margin-bottom: 16px;">
+            Animowana mapa radarowa opadów atmosferycznych w czasie rzeczywistym z wycentrowaniem na Twoją lokalizację w Home Assistant (${lat.toFixed(2)}°, ${lon.toFixed(2)}°).
+          </p>
+
+          <div class="radar-legend">
+            <span style="color:#cbd5e1; font-weight:600;">Intensywność Opadu:</span>
+            <span>Mżawka</span>
+            <div class="radar-legend-bar"></div>
+            <span>Ulewa / Grad</span>
+          </div>
+
+          <div style="border-radius: 12px; overflow: hidden; border: 1px solid #334155; background: #0f172a; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);">
+            <iframe
+              src="https://www.rainviewer.com/map.html?loc=${lat},${lon},${zoom}&o=83&c=1&o=83&layer=radar&sm=1&sn=1"
+              style="width: 100%; height: 580px; border: none;"
+              allowfullscreen
+              loading="lazy">
+            </iframe>
           </div>
         </div>
       `;
@@ -520,7 +774,6 @@ class ForecastFusionPanel extends HTMLElement {
               </select>
             </div>
 
-            <!-- Sekcja Ubioru z osobnymi opcjami dla wiatrówki, płaszcza, kurtki przeciwdeszczowej i zimowej -->
             <div class="clothing-section">
               <h3>👔 Zastosowany Ubiór (Spodnie, Bluza, Kurtka)</h3>
               <div class="grid-2" style="grid-template-columns: 1fr 1fr 1fr;">
@@ -533,7 +786,7 @@ class ForecastFusionPanel extends HTMLElement {
                   </select>
                 </div>
                 <div class="form-group">
-                  <label for="fb-top">🧥 Bluza / Sweter:</label>
+                  <label for="fb-top">Sweter / Bluza:</label>
                   <select id="fb-top" class="form-control">
                     <option value="bluza_brak">Brak (Sam T-Shirt / Koszulka)</option>
                     <option value="bluza_lekka" selected>Lekka bluza / Sweter</option>
@@ -571,7 +824,7 @@ class ForecastFusionPanel extends HTMLElement {
     }
 
     if (this.activeTab === 'history') {
-      // Group observations and forecasts by time bucket
+      const now = new Date();
       const groupsMap = new Map();
 
       const getHourKey = (isoStr) => {
@@ -582,10 +835,11 @@ class ForecastFusionPanel extends HTMLElement {
         return d.toISOString();
       };
 
-      // 1. Group observations by time slot
+      // 1. Group observations by time slot (ONLY past/present hours <= now)
       historyObs.forEach(o => {
         const key = getHourKey(o.start_at || o.end_at);
         if (!key) return;
+        if (new Date(key) > now) return; // Exclude future hours
         if (!groupsMap.has(key)) {
           groupsMap.set(key, {
             timeKey: key,
@@ -599,10 +853,11 @@ class ForecastFusionPanel extends HTMLElement {
         item.obs[o.parameter] = o.value;
       });
 
-      // 2. Group fused forecasts by time slot
+      // 2. Group fused forecasts by time slot (ONLY past/present hours <= now)
       historyFused.forEach(fp => {
         const key = getHourKey(fp.valid_at);
         if (!key) return;
+        if (new Date(key) > now) return; // Exclude future hours
         if (!groupsMap.has(key)) {
           groupsMap.set(key, {
             timeKey: key,
@@ -617,13 +872,24 @@ class ForecastFusionPanel extends HTMLElement {
       });
 
       const groupedRows = Array.from(groupsMap.values()).sort((a, b) => new Date(b.timeKey) - new Date(a.timeKey));
+      const hasObsData = groupedRows.some(r => Object.keys(r.obs).length > 0);
 
       return `
         <div class="card">
           <h2>Dane Historyczne Pogody: Obserwacje Rzeczywiste vs Prognoza</h2>
           <p style="font-size: 13px; color: #94a3b8; margin-bottom: 20px;">
-            Wiersze zgrupowane według zakresu czasu (godziny). Kolumny prezentują odczyty fizyczne czujników rzeczywistych obok wartości przewidywanych przez fuzję prognoz wraz z obliczoną różnicą (błędem).
+            Wiersze zgrupowane według minionych i obecnych godzin (do ${now.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}).
           </p>
+
+          ${
+            !hasObsData
+              ? `<div class="info-box">ℹ️ Czujniki weryfikujące próbkowane są automatycznie co 15 minut. Upewnij się, że przypisałeś czujniki w Config Flow / Opcjach integracji. Dane historyczne zbierają się na bieżąco.</div>`
+              : ''
+          }
+
+          <!-- Wykres porównawczy: Dane prognozowane vs odczyt realny -->
+          ${this.renderHistoryChart(groupedRows)}
+
           <div class="table-responsive">
             <table>
               <thead>
@@ -642,10 +908,20 @@ class ForecastFusionPanel extends HTMLElement {
               <tbody>
                 ${
                   groupedRows.length === 0
-                    ? `<tr><td colspan="9" style="text-align:center; color:#94a3b8;">Brak zapisanych obserwacji ani prognoz dla zakresów czasu.</td></tr>`
+                    ? `<tr><td colspan="9" style="text-align:center; color:#94a3b8;">Brak danych historycznych dla minionych godzin.</td></tr>`
                     : groupedRows.map(r => {
                         const obsTemp = r.obs.temperature != null ? parseFloat(r.obs.temperature) : null;
-                        const obsPrecip = r.obs.precipitation != null ? r.obs.precipitation : '-';
+
+                        let obsPrecip = '-';
+                        if (r.obs.precipitation != null) {
+                          obsPrecip = `${r.obs.precipitation} mm`;
+                        }
+                        if (r.obs.precipitation_binary != null) {
+                          const isRaining = r.obs.precipitation_binary === true || r.obs.precipitation_binary === 'true' || r.obs.precipitation_binary === 'on';
+                          const binText = isRaining ? '🌧️ Pada' : '☀️ Brak opadu';
+                          obsPrecip = obsPrecip !== '-' ? `${binText} (${obsPrecip})` : binText;
+                        }
+
                         const obsWind = r.obs.wind_speed != null ? parseFloat(r.obs.wind_speed) : null;
 
                         const fcTemp = r.forecast && r.forecast.temperature != null ? r.forecast.temperature : null;
@@ -670,7 +946,7 @@ class ForecastFusionPanel extends HTMLElement {
                             <td style="color:#38bdf8;">${fcPrecip != null ? fcPrecip.toFixed(1) : '-'}</td>
                             <td>${fcWind != null ? fcWind.toFixed(1) : '-'}</td>
                             <td><span class="confidence-badge">${fcCond}</span></td>
-                            <td style="font-weight:700; color:${tempDiff.startsWith('+') ? '#f87171' : tempDiff.startsWith('-') ? '#60a5fa' : '#94a3b8'}">${tempDiff}</td>
+                            <td style="font-weight:700; color:${tempDiff.startsWith('+') ? '#f87171' : tempDiff.startsWith('-') ? '#60a5fa' : '#94a3b8'}">${tempDiff}">${tempDiff}</td>
                           </tr>
                         `;
                       }).join('')
@@ -678,41 +954,6 @@ class ForecastFusionPanel extends HTMLElement {
               </tbody>
             </table>
           </div>
-        </div>
-      `;
-    }
-
-    if (this.activeTab === 'sensors') {
-      return `
-        <div class="card">
-          <h2>Czujniki "Prawdziwej Pogody" (Verification Sensors)</h2>
-          <p style="font-size: 13px; color: #94a3b8; margin-bottom: 20px;">
-            Przypisz encje fizycznych czujników zamontowanych w Twoim domu/ogrodzie, aby automatycznie weryfikować dokładność dostawców pogodowych.
-          </p>
-
-          <form id="sensors-form" onsubmit="return false;">
-            <div class="form-group">
-              <label for="sens-temp">Czujnik Temperatury Rzeczywistej:</label>
-              <input type="text" id="sens-temp" class="form-control" value="${sensors.temperature || ''}" placeholder="sensor.outdoor_temperature">
-            </div>
-
-            <div class="form-group">
-              <label for="sens-hum">Czujnik Wilgotności Rzeczywistej:</label>
-              <input type="text" id="sens-hum" class="form-control" value="${sensors.humidity || ''}" placeholder="sensor.outdoor_humidity">
-            </div>
-
-            <div class="form-group">
-              <label for="sens-precip">Czujnik Opadów / Stacja Pogodowa:</label>
-              <input type="text" id="sens-precip" class="form-control" value="${sensors.precipitation || ''}" placeholder="sensor.rain_gauge">
-            </div>
-
-            <div class="form-group">
-              <label for="sens-wind">Czujnik Prędkości Wiatru:</label>
-              <input type="text" id="sens-wind" class="form-control" value="${sensors.wind_speed || ''}" placeholder="sensor.wind_speed">
-            </div>
-
-            <button type="button" class="btn-submit" id="btn-save-sensors">💾 Zapisz Czujniki Weryfikujące</button>
-          </form>
         </div>
       `;
     }
@@ -725,14 +966,14 @@ class ForecastFusionPanel extends HTMLElement {
 
     // Tab buttons
     const tForecast = root.getElementById('tab-forecast');
+    const tRadar = root.getElementById('tab-radar');
     const tFeedback = root.getElementById('tab-feedback');
     const tHistory = root.getElementById('tab-history');
-    const tSensors = root.getElementById('tab-sensors');
 
     if (tForecast) tForecast.addEventListener('click', () => this.switchTab('forecast'));
+    if (tRadar) tRadar.addEventListener('click', () => this.switchTab('radar'));
     if (tFeedback) tFeedback.addEventListener('click', () => this.switchTab('feedback'));
     if (tHistory) tHistory.addEventListener('click', () => this.switchTab('history'));
-    if (tSensors) tSensors.addEventListener('click', () => this.switchTab('sensors'));
 
     // Mode buttons in feedback
     const mHour = root.getElementById('mode-hour');
@@ -747,12 +988,6 @@ class ForecastFusionPanel extends HTMLElement {
     const btnFb = root.getElementById('btn-save-feedback');
     if (btnFb) {
       btnFb.addEventListener('click', () => this.submitFeedback());
-    }
-
-    // Save Sensors button
-    const btnSens = root.getElementById('btn-save-sensors');
-    if (btnSens) {
-      btnSens.addEventListener('click', () => this.saveSensors());
     }
   }
 
@@ -805,29 +1040,6 @@ class ForecastFusionPanel extends HTMLElement {
       this.fetchData();
     } catch (err) {
       alert('Błąd podczas zapisywania oceny: ' + err.message);
-    }
-  }
-
-  async saveSensors() {
-    const root = this.shadowRoot;
-
-    const vSensors = {
-      temperature: root.getElementById('sens-temp').value || undefined,
-      humidity: root.getElementById('sens-hum').value || undefined,
-      precipitation: root.getElementById('sens-precip').value || undefined,
-      wind_speed: root.getElementById('sens-wind').value || undefined
-    };
-
-    try {
-      await this._hass.callWS({
-        type: 'forecast_fusion/save_verification_sensors',
-        config_entry_id: this.entryId,
-        verification_sensors: vSensors
-      });
-      alert('Ustawienia czujników weryfikujących zostały zapisane!');
-      this.fetchData();
-    } catch (err) {
-      alert('Błąd podczas zapisywania czujników: ' + err.message);
     }
   }
 }

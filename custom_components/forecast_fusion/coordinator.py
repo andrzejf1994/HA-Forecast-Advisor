@@ -60,7 +60,9 @@ class ForecastFusionCoordinator(DataUpdateCoordinator[list[FusedForecastPoint]])
 
     async def _sample_verification_sensors(self) -> None:
         """Sample configured ground-truth verification sensors."""
-        verification_sensors: dict[str, str] = self.entry.options.get(CONF_VERIFICATION_SENSORS, {})
+        verification_sensors: dict[str, str] = self.entry.options.get(
+            CONF_VERIFICATION_SENSORS, self.entry.data.get(CONF_VERIFICATION_SENSORS, {})
+        )
         now = datetime.now(UTC)
         start_at = now - timedelta(minutes=15)
 
@@ -68,6 +70,7 @@ class ForecastFusionCoordinator(DataUpdateCoordinator[list[FusedForecastPoint]])
             "temperature": WeatherParameter.TEMPERATURE,
             "humidity": WeatherParameter.HUMIDITY,
             "precipitation": WeatherParameter.PRECIPITATION,
+            "precipitation_binary": WeatherParameter.PRECIPITATION,
             "wind_speed": WeatherParameter.WIND_SPEED,
         }
 
@@ -94,6 +97,10 @@ class ForecastFusionCoordinator(DataUpdateCoordinator[list[FusedForecastPoint]])
             all_points: list[ForecastPoint] = []
             for snap in snapshots_dict.values():
                 all_points.extend(snap.points)
+                try:
+                    await self.repo.save_snapshot(snap)
+                except Exception as s_err:
+                    _LOGGER.debug("Could not save forecast snapshot: %s", s_err)
 
             fused = fuse_forecasts(all_points, algorithm=self.algorithm)
             self.fused_forecast = fused

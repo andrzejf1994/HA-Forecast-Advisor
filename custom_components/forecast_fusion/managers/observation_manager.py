@@ -89,9 +89,9 @@ class ObservationManager:
 
         raw_str = str(state.state)
         val: float | str | bool = raw_str
-        if raw_str.lower() == "true":
+        if raw_str.lower() in ("true", "on"):
             val = True
-        elif raw_str.lower() == "false":
+        elif raw_str.lower() in ("false", "off"):
             val = False
         else:
             with contextlib.suppress(ValueError):

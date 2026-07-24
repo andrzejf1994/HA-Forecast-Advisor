@@ -4,11 +4,19 @@ from datetime import UTC, datetime
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.forecast_fusion.binary_sensor import ForecastFusionUmbrellaBinarySensor
+from custom_components.forecast_fusion.binary_sensor import (
+    ForecastFusionStormAlertBinarySensor,
+    ForecastFusionUmbrellaBinarySensor,
+)
 from custom_components.forecast_fusion.const import CONF_SOURCES, DOMAIN
 from custom_components.forecast_fusion.coordinator import ForecastFusionRuntimeData
 from custom_components.forecast_fusion.core.models import FusedForecastPoint, FusedValue
-from custom_components.forecast_fusion.sensor import ForecastFusionConfidenceSensor
+from custom_components.forecast_fusion.sensor import (
+    ForecastFusionConfidenceSensor,
+    ForecastFusionPerceivedTemperatureSensor,
+    ForecastFusionStormRiskSensor,
+    ForecastFusionThermalPerceptionSensor,
+)
 from custom_components.forecast_fusion.weather import ForecastFusionWeatherEntity
 
 
@@ -59,3 +67,18 @@ async def test_weather_and_sensors(hass):
 
     umbrella_sensor = ForecastFusionUmbrellaBinarySensor(coordinator, entry)
     assert umbrella_sensor.is_on is True
+
+    storm_risk_sensor = ForecastFusionStormRiskSensor(coordinator, entry)
+    storm_alert_sensor = ForecastFusionStormAlertBinarySensor(coordinator, entry)
+
+    assert storm_risk_sensor.native_value in ("Brak", "Umiarkowane", "Wysokie", "Ekstremalne")
+    assert isinstance(storm_alert_sensor.is_on, bool)
+    assert storm_risk_sensor.extra_state_attributes["fused_points_count"] == 1
+
+    perceived_sensor = ForecastFusionPerceivedTemperatureSensor(coordinator, entry)
+    assert perceived_sensor.native_value is not None
+    assert isinstance(perceived_sensor.native_value, float)
+    assert "thermal_perception" in perceived_sensor.extra_state_attributes
+
+    perception_sensor = ForecastFusionThermalPerceptionSensor(coordinator, entry)
+    assert perception_sensor.native_value == "Komfortowo"

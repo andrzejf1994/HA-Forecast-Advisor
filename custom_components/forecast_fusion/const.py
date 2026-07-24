@@ -15,10 +15,12 @@ CONF_OBSERVATIONS: Final[str] = "observations"
 CONF_FUSION_ALGORITHM: Final[str] = "fusion_algorithm"
 CONF_VERIFICATION_SENSORS: Final[str] = "verification_sensors"
 CONF_AI_TASK_ENGINE: Final[str] = "ai_task_engine"
+CONF_RADAR_ZOOM: Final[str] = "radar_zoom"
 
 # Defaults
 DEFAULT_POLL_INTERVAL_MINUTES: Final[int] = 30
 DEFAULT_INITIAL_WEIGHT: Final[float] = 1.0
+DEFAULT_RADAR_ZOOM: Final[int] = 8
 DEFAULT_RAW_FORECASTS_RETENTION_DAYS: Final[int] = 90
 DEFAULT_OBSERVATIONS_RETENTION_DAYS: Final[int] = 365
 DEFAULT_VERIFICATION_RESULTS_RETENTION_DAYS: Final[int] = 365

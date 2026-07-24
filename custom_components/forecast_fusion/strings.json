@@ -11,8 +11,10 @@
           "ai_task_engine": "AI Task Engine / Conversation Agent (Optional)",
           "temperature_sensor": "Real Temperature Sensor (Optional)",
           "humidity_sensor": "Real Humidity Sensor (Optional)",
-          "precipitation_sensor": "Real Precipitation Sensor (Optional)",
-          "wind_speed_sensor": "Real Wind Speed Sensor (Optional)"
+          "precipitation_sensor": "Numeric Rain Gauge Sensor (Optional, mm)",
+          "precipitation_binary_sensor": "Binary Rain Sensor (Optional, on/off)",
+          "wind_speed_sensor": "Real Wind Speed Sensor (Optional)",
+          "storm_sensor": "Storm / Lightning Sensor e.g. Burze.dzis.net (Optional)"
         }
       }
     },
@@ -34,8 +36,10 @@
           "ai_task_engine": "AI Task Engine / Conversation Agent (Optional)",
           "temperature_sensor": "Real Temperature Sensor (Optional)",
           "humidity_sensor": "Real Humidity Sensor (Optional)",
-          "precipitation_sensor": "Real Precipitation Sensor (Optional)",
-          "wind_speed_sensor": "Real Wind Speed Sensor (Optional)"
+          "precipitation_sensor": "Numeric Rain Gauge Sensor (Optional, mm)",
+          "precipitation_binary_sensor": "Binary Rain Sensor (Optional, on/off)",
+          "wind_speed_sensor": "Real Wind Speed Sensor (Optional)",
+          "storm_sensor": "Storm / Lightning Sensor e.g. Burze.dzis.net (Optional)"
         }
       }
     },

@@ -1,5 +1,6 @@
 """WebSocket API registration and handlers for Forecast Fusion."""
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -8,10 +9,19 @@ from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 
-from ..const import CONF_VERIFICATION_SENSORS, DOMAIN
+from ..const import (
+    CONF_RADAR_ZOOM,
+    CONF_VERIFICATION_SENSORS,
+    DEFAULT_RADAR_ZOOM,
+    DOMAIN,
+)
 from ..coordinator import ForecastFusionCoordinator, ForecastFusionRuntimeData
 from ..core.enums import WeatherParameter
+from ..core.fusion import fuse_forecasts
+from ..core.models import ForecastPoint
 from ..core.normalizer import ensure_utc
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _get_entry(hass: HomeAssistant, msg: dict[str, Any]) -> ConfigEntry | None:
@@ -75,6 +85,9 @@ async def ws_get_overview(hass: HomeAssistant, connection: Any, msg: dict[str, A
     verification_sensors = entry.options.get(
         CONF_VERIFICATION_SENSORS, entry.data.get(CONF_VERIFICATION_SENSORS, {})
     )
+    radar_zoom = entry.options.get(
+        CONF_RADAR_ZOOM, entry.data.get(CONF_RADAR_ZOOM, DEFAULT_RADAR_ZOOM)
+    )
 
     connection.send_result(
         msg["id"],
@@ -86,6 +99,9 @@ async def ws_get_overview(hass: HomeAssistant, connection: Any, msg: dict[str, A
             "fused_points": points_summary,
             "overall_confidence": coordinator.overall_confidence,
             "verification_sensors": verification_sensors,
+            "latitude": hass.config.latitude,
+            "longitude": hass.config.longitude,
+            "radar_zoom": radar_zoom,
         },
     )
 
@@ -132,19 +148,28 @@ async def ws_get_history(hass: HomeAssistant, connection: Any, msg: dict[str, An
     coordinator = runtime_data.coordinator
 
     history_records = await coordinator.repo.query_observations()
-    serialized_obs = [
-        {
-            "id": o.observation_id,
-            "parameter": o.parameter.value,
-            "start_at": o.start_at.isoformat(),
-            "end_at": o.end_at.isoformat(),
-            "value": o.value,
-            "unit": o.unit,
-            "source_mode": o.source_mode.value,
-            "source_entity_id": o.source_entity_id,
-        }
-        for o in history_records[:200]
-    ]
+    verification_sensors = entry.options.get(
+        CONF_VERIFICATION_SENSORS, entry.data.get(CONF_VERIFICATION_SENSORS, {})
+    )
+    binary_precip_entity = verification_sensors.get("precipitation_binary")
+
+    serialized_obs = []
+    for o in history_records[:200]:
+        param_name = o.parameter.value
+        if binary_precip_entity and o.source_entity_id == binary_precip_entity:
+            param_name = "precipitation_binary"
+        serialized_obs.append(
+            {
+                "id": o.observation_id,
+                "parameter": param_name,
+                "start_at": o.start_at.isoformat(),
+                "end_at": o.end_at.isoformat(),
+                "value": o.value,
+                "unit": o.unit,
+                "source_mode": o.source_mode.value,
+                "source_entity_id": o.source_entity_id,
+            }
+        )
 
     fused_summary = []
     if coordinator.fused_forecast:
@@ -162,6 +187,34 @@ async def ws_get_history(hass: HomeAssistant, connection: Any, msg: dict[str, An
                     "overall_confidence": p.overall_confidence,
                 }
             )
+
+    try:
+        snapshots = await coordinator.repo.query_snapshots()
+        past_points: list[ForecastPoint] = []
+        for snap in snapshots:
+            past_points.extend(snap.points)
+        if past_points:
+            fused_past = fuse_forecasts(past_points, algorithm=coordinator.algorithm)
+            existing_times = {item["valid_at"] for item in fused_summary}
+            for p in fused_past:
+                v_iso = p.valid_at.isoformat()
+                if v_iso not in existing_times:
+                    existing_times.add(v_iso)
+                    fused_summary.append(
+                        {
+                            "valid_at": v_iso,
+                            "temperature": p.temperature.value,
+                            "apparent_temperature": p.apparent_temperature.value,
+                            "humidity": p.humidity.value,
+                            "precipitation_probability": p.precipitation_probability.value,
+                            "precipitation_amount": p.precipitation_amount.value,
+                            "wind_speed": p.wind_speed.value,
+                            "condition": p.condition.value,
+                            "overall_confidence": p.overall_confidence,
+                        }
+                    )
+    except Exception as exc:
+        _LOGGER.debug("Could not query historical snapshots for history view: %s", exc)
 
     connection.send_result(
         msg["id"],
