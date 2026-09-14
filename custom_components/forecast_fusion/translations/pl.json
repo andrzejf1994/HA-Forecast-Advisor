@@ -48,5 +48,12 @@
     "error": {
       "no_sources": "Musisz wybrać przynajmniej jedną encję pogodową."
     }
+  },
+  "entity": {
+    "button": {
+      "reset_database": {
+        "name": "Resetuj bazę danych"
+      }
+    }
   }
 }

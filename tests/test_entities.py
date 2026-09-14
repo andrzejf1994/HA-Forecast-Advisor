@@ -83,3 +83,31 @@ async def test_weather_and_sensors(hass):
 
     perception_sensor = ForecastFusionThermalPerceptionSensor(coordinator, entry)
     assert perception_sensor.native_value == "Komfortowo"
+
+
+async def test_reset_database_button(hass):
+    """Test reset database button press execution."""
+    from homeassistant.const import EntityCategory
+
+    from custom_components.forecast_fusion.button import ForecastFusionResetDatabaseButton
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Forecast Fusion",
+        data={CONF_SOURCES: ["weather.mock_source"]},
+    )
+    entry.add_to_hass(hass)
+    hass.states.async_set("weather.mock_source", "sunny")
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    runtime_data: ForecastFusionRuntimeData = entry.runtime_data
+    coordinator = runtime_data.coordinator
+
+    button = ForecastFusionResetDatabaseButton(coordinator, entry)
+    assert button.entity_category == EntityCategory.DIAGNOSTIC
+    assert button.entity_registry_enabled_default is False
+
+    await button.async_press()
+    assert coordinator.fused_forecast == []

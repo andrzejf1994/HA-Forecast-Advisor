@@ -57,8 +57,22 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
 async def ws_get_overview(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
     """Handle forecast_fusion/get_overview command."""
     entry = _get_entry(hass, msg)
-    if not entry:
-        connection.send_error(msg["id"], "entry_not_found", "Config entry not found")
+    if not entry or not hasattr(entry, "runtime_data") or not entry.runtime_data:
+        connection.send_result(
+            msg["id"],
+            {
+                "config_entry_id": entry.entry_id if entry else "",
+                "last_update_success": False,
+                "sources": [],
+                "fusion_algorithm": "weighted_median",
+                "fused_points": [],
+                "overall_confidence": 1.0,
+                "verification_sensors": {},
+                "latitude": hass.config.latitude,
+                "longitude": hass.config.longitude,
+                "radar_zoom": 6,
+            },
+        )
         return
 
     runtime_data: ForecastFusionRuntimeData = entry.runtime_data
@@ -140,8 +154,16 @@ async def ws_get_accuracy(hass: HomeAssistant, connection: Any, msg: dict[str, A
 async def ws_get_history(hass: HomeAssistant, connection: Any, msg: dict[str, Any]) -> None:
     """Handle forecast_fusion/get_history command."""
     entry = _get_entry(hass, msg)
-    if not entry:
-        connection.send_error(msg["id"], "entry_not_found", "Config entry not found")
+    if not entry or not hasattr(entry, "runtime_data") or not entry.runtime_data:
+        connection.send_result(
+            msg["id"],
+            {
+                "status": "ok",
+                "observations_count": 0,
+                "recent_observations": [],
+                "fused_points": [],
+            },
+        )
         return
 
     runtime_data: ForecastFusionRuntimeData = entry.runtime_data

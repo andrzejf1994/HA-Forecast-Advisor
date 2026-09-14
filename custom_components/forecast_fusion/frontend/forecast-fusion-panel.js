@@ -10,12 +10,27 @@ class ForecastFusionPanel extends HTMLElement {
     this.hass = null;
     this.loading = true;
     this.errorMsg = null;
+    this._connected = false;
+    this._fetchInitiated = false;
+  }
+
+
+  connectedCallback() {
+    this._connected = true;
+    if (this._hass && !this._fetchInitiated) {
+      this._fetchInitiated = true;
+      this.fetchData();
+    } else if (!this._hass) {
+      // Render skeleton immediately; fetchData will run once hass is set
+      this.loading = true;
+      this.render();
+    }
   }
 
   set hass(hass) {
-    const isFirstInit = !this._hass;
     this._hass = hass;
-    if (isFirstInit) {
+    if (this._connected && !this._fetchInitiated) {
+      this._fetchInitiated = true;
       this.fetchData();
     }
   }
@@ -24,35 +39,41 @@ class ForecastFusionPanel extends HTMLElement {
     return this._hass;
   }
 
+
   async fetchData() {
-    if (!this._hass) return;
+    if (!this._hass) {
+      this.loading = false;
+      this.render();
+      return;
+    }
     this.loading = true;
     this.errorMsg = null;
     this.render();
 
     try {
-      // Fetch overview data directly via WS API
-      const res = await this._hass.callWS({
-        type: 'forecast_fusion/get_overview'
-      });
+      // Timeout promise wrapper to prevent endless loading spinner
+      const fetchPromise = Promise.all([
+        this._hass.callWS({ type: 'forecast_fusion/get_overview' }),
+        this._hass.callWS({ type: 'forecast_fusion/get_history' }).catch(err => {
+          console.warn('History WS fetch warning:', err);
+          return { status: 'ok', observations_count: 0, recent_observations: [], fused_points: [] };
+        })
+      ]);
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Przekroczono czas oczekiwania na dane (Timeout 8s)')), 8000)
+      );
+
+      const [res, hist] = await Promise.race([fetchPromise, timeoutPromise]);
+
       this.data = res;
       if (res && res.config_entry_id) {
         this.entryId = res.config_entry_id;
       }
-
-      // Fetch history data
-      try {
-        const hist = await this._hass.callWS({
-          type: 'forecast_fusion/get_history',
-          config_entry_id: this.entryId
-        });
-        this.historyData = hist;
-      } catch (hErr) {
-        console.warn('Could not fetch history data:', hErr);
-      }
+      this.historyData = hist;
     } catch (e) {
       console.error('Error fetching Forecast Fusion data:', e);
-      this.errorMsg = 'Nie udało się pobrać danych z Forecast Fusion. Upewnij się, że integracja jest dodana i uruchomiona w Home Assistant.';
+      this.errorMsg = `Nie udało się pobrać danych z Forecast Fusion (${e.message || 'Błąd połączenia WS'}). Upewnij się, że integracja jest uruchomiona.`;
     } finally {
       this.loading = false;
       this.render();
@@ -426,11 +447,11 @@ class ForecastFusionPanel extends HTMLElement {
         </button>
       </div>
 
-      ${this.errorMsg ? `<div class="alert-error">${this.errorMsg}</div>` : ''}
+      ${this.errorMsg ? `<div class="alert-error">${this.errorMsg} <button id="btn-retry" style="margin-left: 10px; padding: 4px 10px; cursor: pointer; border-radius: 4px; border: 1px solid currentColor;">🔄 Ponów próbę</button></div>` : ''}
 
       ${
         this.loading
-          ? `<div class="loading-spinner">⏳ Ładowanie danych z Forecast Fusion...</div>`
+          ? `<div class="loading-spinner">⏳ Ładowanie danych z Forecast Fusion... <button id="btn-retry-loading" style="margin-left: 10px; padding: 4px 10px; cursor: pointer; border-radius: 4px; border: 1px solid currentColor;">🔄 Ponów</button></div>`
           : this.renderTabContent(points, historyObs, historyFused, lat, lon, zoom)
       }
     `;
@@ -1002,12 +1023,15 @@ class ForecastFusionPanel extends HTMLElement {
   bindEvents() {
     const root = this.shadowRoot;
 
-    // Tab buttons
+    const btnRetry = root.getElementById('btn-retry');
+    if (btnRetry) btnRetry.addEventListener('click', () => this.fetchData());
+    const btnRetryLoading = root.getElementById('btn-retry-loading');
+    if (btnRetryLoading) btnRetryLoading.addEventListener('click', () => this.fetchData());
+
     const tForecast = root.getElementById('tab-forecast');
     const tRadar = root.getElementById('tab-radar');
     const tFeedback = root.getElementById('tab-feedback');
     const tHistory = root.getElementById('tab-history');
-
     if (tForecast) tForecast.addEventListener('click', () => this.switchTab('forecast'));
     if (tRadar) tRadar.addEventListener('click', () => this.switchTab('radar'));
     if (tFeedback) tFeedback.addEventListener('click', () => this.switchTab('feedback'));

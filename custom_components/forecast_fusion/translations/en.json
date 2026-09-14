@@ -48,5 +48,12 @@
     "error": {
       "no_sources": "You must select at least one weather forecast entity."
     }
+  },
+  "entity": {
+    "button": {
+      "reset_database": {
+        "name": "Reset Database"
+      }
+    }
   }
 }

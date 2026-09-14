@@ -1,6 +1,7 @@
 """SQLite repository implementation for Forecast Fusion storage."""
 
 import asyncio
+import contextlib
 import json
 import logging
 import sqlite3
@@ -356,3 +357,31 @@ class SQLiteRepository:
                 conn.close()
 
         await asyncio.to_thread(_do_save)
+
+    async def reset_database(self) -> None:
+        """Clear all records from all database tables."""
+
+        def _do_reset() -> None:
+            conn = self._get_connection()
+            try:
+                tables = [
+                    "forecast_points",
+                    "snapshots",
+                    "observations",
+                    "verification_results",
+                    "comfort_feedback",
+                    "comfort_boundaries",
+                ]
+                with conn:
+                    for table in tables:
+                        with contextlib.suppress(sqlite3.OperationalError):
+                            conn.execute(f"DELETE FROM {table};")  # noqa: S608
+                # VACUUM must run outside a transaction
+                with contextlib.suppress(sqlite3.OperationalError):
+                    conn.execute("VACUUM;")
+            finally:
+                conn.close()
+
+        await asyncio.to_thread(_do_reset)
+
+
