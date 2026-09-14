@@ -26,12 +26,15 @@ class SQLiteRepository:
     def __init__(self, db_path: str) -> None:
         """Initialize repository with database path."""
         self.db_path = db_path
+        self._migrations_applied = False
 
     def _get_connection(self) -> sqlite3.Connection:
         """Create and configure a new SQLite connection."""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
-        apply_migrations(conn)
+        if not self._migrations_applied:
+            apply_migrations(conn)
+            self._migrations_applied = True
         return conn
 
     async def async_init(self) -> None:
@@ -115,6 +118,7 @@ class SQLiteRepository:
         source_id: str | None = None,
         start_at: datetime | None = None,
         end_at: datetime | None = None,
+        limit: int | None = None,
     ) -> list[ForecastSnapshot]:
         """Query forecast snapshots from SQLite."""
 
@@ -133,6 +137,9 @@ class SQLiteRepository:
                     query += " AND fetched_at <= ?"
                     params.append(end_at.isoformat())
                 query += " ORDER BY fetched_at DESC"
+                if limit is not None:
+                    query += " LIMIT ?"
+                    params.append(limit)
 
                 snapshot_rows = conn.execute(query, params).fetchall()
                 results: list[ForecastSnapshot] = []

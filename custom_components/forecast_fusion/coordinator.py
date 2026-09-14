@@ -1,5 +1,6 @@
 """DataUpdateCoordinator for Forecast Fusion."""
 
+import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
@@ -107,7 +108,10 @@ class ForecastFusionCoordinator(DataUpdateCoordinator[list[FusedForecastPoint]])
             # If live sources were unavailable on startup, attempt restoring last cached fused forecast
             if not fused and not self.fused_forecast:
                 try:
-                    cached_snapshots = await self.repo.query_snapshots(source_id="forecast_fusion")
+                    async with asyncio.timeout(2.0):
+                        cached_snapshots = await self.repo.query_snapshots(
+                            source_id="forecast_fusion", limit=1
+                        )
                     if cached_snapshots:
                         latest = cached_snapshots[0]
                         restored: list[FusedForecastPoint] = []
