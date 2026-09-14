@@ -80,7 +80,7 @@ class ObservationManager:
         """Record an observation fetched from a Home Assistant entity state."""
         state = self.hass.states.get(entity_id)
         if state is None or state.state in ("unknown", "unavailable"):
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Entity %s state unavailable for observation parameter %s",
                 entity_id,
                 parameter.value,

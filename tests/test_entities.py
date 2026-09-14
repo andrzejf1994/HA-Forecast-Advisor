@@ -22,6 +22,7 @@ from custom_components.forecast_fusion.weather import ForecastFusionWeatherEntit
 
 async def test_weather_and_sensors(hass):
     """Test weather, sensor, and binary sensor entity properties."""
+    hass.states.async_set("weather.mock_source", "sunny")
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Forecast Fusion",

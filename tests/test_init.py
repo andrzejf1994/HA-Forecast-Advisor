@@ -16,6 +16,7 @@ async def test_async_setup(hass):
 
 async def test_setup_and_unload_entry(hass):
     """Test setting up and unloading a config entry."""
+    hass.states.async_set("weather.mock_source", "sunny")
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Forecast Fusion",
@@ -39,6 +40,7 @@ async def test_setup_and_unload_entry(hass):
 
 async def test_reload_entry(hass):
     """Test reloading a config entry."""
+    hass.states.async_set("weather.mock_source", "sunny")
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Forecast Fusion",

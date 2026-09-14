@@ -9,6 +9,7 @@ from custom_components.forecast_fusion.managers.source_manager import SourceMana
 async def test_async_fetch_source_forecast_success(hass):
     """Test successful forecast fetching and health tracking."""
     manager = SourceManager(hass)
+    hass.states.async_set("weather.mock", "sunny")
 
     async def mock_get_forecasts(call):
         return {
@@ -46,9 +47,23 @@ async def test_async_fetch_source_forecast_success(hass):
     assert health.last_success_at is not None
 
 
+async def test_async_fetch_source_forecast_unavailable_entity(hass):
+    """Test skipping service call when entity is unavailable or missing."""
+    manager = SourceManager(hass)
+    snapshot = await manager.async_fetch_source_forecast(
+        source_id="src1",
+        entity_id="weather.missing",
+    )
+    assert snapshot is None
+    health = manager.get_health("src1")
+    assert health.consecutive_failures == 1
+    assert "unavailable" in (health.last_error or "")
+
+
 async def test_async_fetch_source_forecast_failure(hass):
     """Test error handling and health tracking on failure."""
     manager = SourceManager(hass)
+    hass.states.async_set("weather.mock", "sunny")
 
     async def mock_failing_service(call):
         raise RuntimeError("API error")
@@ -74,6 +89,7 @@ async def test_async_fetch_source_forecast_failure(hass):
 async def test_async_fetch_all_sources(hass):
     """Test fetching from multiple sources."""
     manager = SourceManager(hass)
+    hass.states.async_set("weather.src1", "sunny")
 
     async def mock_get_forecasts(call):
         return {

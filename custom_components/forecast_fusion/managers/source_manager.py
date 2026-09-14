@@ -55,6 +55,19 @@ class SourceManager:
         health.entity_id = entity_id
         now = datetime.now(UTC)
 
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state in ("unknown", "unavailable"):
+            health.consecutive_failures += 1
+            health.last_error = f"Entity {entity_id} is unavailable"
+            if health.consecutive_failures >= 3:
+                health.available = False
+            _LOGGER.debug(
+                "Weather entity %s is not available yet (state: %s)",
+                entity_id,
+                state.state if state else "not found",
+            )
+            return None
+
         try:
             response = await self.hass.services.async_call(
                 "weather",
