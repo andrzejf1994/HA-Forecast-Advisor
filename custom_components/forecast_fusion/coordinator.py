@@ -10,7 +10,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import CONF_FUSION_ALGORITHM, CONF_SOURCES, CONF_VERIFICATION_SENSORS, DOMAIN
 from .core.enums import ForecastType, WeatherParameter
 from .core.fusion import fuse_forecasts
-from .core.models import ForecastPoint, ForecastSnapshot, FusedForecastPoint
+from .core.models import ForecastPoint, ForecastSnapshot, FusedForecastPoint, FusedValue
 from .managers.feedback_manager import FeedbackManager
 from .managers.observation_manager import ObservationManager
 from .managers.source_manager import SourceManager
@@ -103,6 +103,62 @@ class ForecastFusionCoordinator(DataUpdateCoordinator[list[FusedForecastPoint]])
                     _LOGGER.debug("Could not save forecast snapshot: %s", s_err)
 
             fused = fuse_forecasts(all_points, algorithm=self.algorithm)
+
+            # If live sources were unavailable on startup, attempt restoring last cached fused forecast
+            if not fused and not self.fused_forecast:
+                try:
+                    cached_snapshots = await self.repo.query_snapshots(source_id="forecast_fusion")
+                    if cached_snapshots:
+                        latest = cached_snapshots[0]
+                        restored: list[FusedForecastPoint] = []
+                        for p in latest.points:
+                            restored.append(
+                                FusedForecastPoint(
+                                    valid_at=p.valid_at,
+                                    temperature=FusedValue(
+                                        p.temperature_c, 1.0, None, None, (), "cached", ()
+                                    ),
+                                    apparent_temperature=FusedValue(
+                                        p.apparent_temperature_c, 1.0, None, None, (), "cached", ()
+                                    ),
+                                    humidity=FusedValue(
+                                        p.humidity_pct, 1.0, None, None, (), "cached", ()
+                                    ),
+                                    precipitation_probability=FusedValue(
+                                        p.precipitation_probability_pct,
+                                        1.0,
+                                        None,
+                                        None,
+                                        (),
+                                        "cached",
+                                        (),
+                                    ),
+                                    precipitation_amount=FusedValue(
+                                        p.precipitation_mm, 1.0, None, None, (), "cached", ()
+                                    ),
+                                    wind_speed=FusedValue(
+                                        p.wind_speed_ms, 1.0, None, None, (), "cached", ()
+                                    ),
+                                    wind_gust=FusedValue(
+                                        p.wind_gust_ms, 1.0, None, None, (), "cached", ()
+                                    ),
+                                    cloud_cover=FusedValue(
+                                        p.cloud_cover_pct, 1.0, None, None, (), "cached", ()
+                                    ),
+                                    condition=FusedValue(
+                                        p.condition, 1.0, None, None, (), "cached", ()
+                                    ),
+                                    overall_confidence=1.0,
+                                )
+                            )
+                        fused = restored
+                        _LOGGER.info(
+                            "Restored %d cached fused forecast points from SQLite on startup",
+                            len(fused),
+                        )
+                except Exception as c_err:
+                    _LOGGER.debug("Could not restore cached fused forecast: %s", c_err)
+
             self.fused_forecast = fused
 
             # Save fused forecast as a historical snapshot in SQLite

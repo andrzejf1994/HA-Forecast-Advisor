@@ -4,8 +4,8 @@ import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, Platform
+from homeassistant.core import Event, HomeAssistant, ServiceCall, SupportsResponse
 
 from .api.websocket import async_register_websocket_api
 from .const import CONF_AI_TASK_ENGINE, DOMAIN
@@ -128,6 +128,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+
+    async def _async_on_ha_started(event: Event) -> None:
+        """Trigger coordinator refresh when Home Assistant completes startup."""
+        _LOGGER.info("Home Assistant started; refreshing Forecast Fusion coordinator")
+        await coordinator.async_request_refresh()
+
+    if hass.is_running:
+        await coordinator.async_request_refresh()
+    else:
+        entry.async_on_unload(
+            hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _async_on_ha_started)
+        )
 
     return True
 
