@@ -7,6 +7,7 @@
   "integration_type": "service",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/andrzejf1994/HA-Forecast-Advisor/issues",
-  "version": "0.2.1"
+  "version": "0.2.2"
+
 }
 
