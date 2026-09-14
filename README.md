@@ -58,6 +58,15 @@
 
 ---
 
+## 🛠️ Sidebar troubleshooting
+
+The sidebar loads the current fused forecast independently from historical data.
+If the SQLite history database is temporarily busy during a refresh or reload,
+the current forecast remains available and the history view retries on the next
+panel refresh.
+
+---
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

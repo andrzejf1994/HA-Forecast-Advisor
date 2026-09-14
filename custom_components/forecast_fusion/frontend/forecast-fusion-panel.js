@@ -51,32 +51,51 @@ class ForecastFusionPanel extends HTMLElement {
     this.render();
 
     try {
-      // Timeout promise wrapper to prevent endless loading spinner
-      const fetchPromise = Promise.all([
-        this._hass.callWS({ type: 'forecast_fusion/get_overview' }),
-        this._hass.callWS({ type: 'forecast_fusion/get_history' }).catch(err => {
-          console.warn('History WS fetch warning:', err);
-          return { status: 'ok', observations_count: 0, recent_observations: [], fused_points: [] };
-        })
-      ]);
-
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Przekroczono czas oczekiwania na dane (Timeout 8s)')), 8000)
+      // The overview is essential for the panel. History is best-effort because a
+      // concurrent SQLite write must not make the whole sidebar look unavailable.
+      const res = await this.callWSWithTimeout(
+        { type: 'forecast_fusion/get_overview' },
+        8000
       );
-
-      const [res, hist] = await Promise.race([fetchPromise, timeoutPromise]);
 
       this.data = res;
       if (res && res.config_entry_id) {
         this.entryId = res.config_entry_id;
       }
-      this.historyData = hist;
+      this._loadHistory();
     } catch (e) {
       console.error('Error fetching Forecast Fusion data:', e);
       this.errorMsg = `Nie udało się pobrać danych z Forecast Fusion (${e.message || 'Błąd połączenia WS'}). Upewnij się, że integracja jest uruchomiona.`;
     } finally {
       this.loading = false;
       this.render();
+    }
+  }
+
+  async callWSWithTimeout(message, timeoutMs) {
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new Error(`Przekroczono czas oczekiwania na dane (Timeout ${timeoutMs / 1000}s)`)),
+        timeoutMs
+      );
+    });
+    try {
+      return await Promise.race([this._hass.callWS(message), timeoutPromise]);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  async _loadHistory() {
+    try {
+      this.historyData = await this.callWSWithTimeout(
+        { type: 'forecast_fusion/get_history', config_entry_id: this.entryId },
+        8000
+      );
+      this.render();
+    } catch (err) {
+      console.warn('History WS fetch warning:', err);
     }
   }
 

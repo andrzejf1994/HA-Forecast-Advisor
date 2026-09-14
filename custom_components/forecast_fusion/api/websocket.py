@@ -169,7 +169,11 @@ async def ws_get_history(hass: HomeAssistant, connection: Any, msg: dict[str, An
     runtime_data: ForecastFusionRuntimeData = entry.runtime_data
     coordinator = runtime_data.coordinator
 
-    history_records = await coordinator.repo.query_observations()
+    try:
+        history_records = await coordinator.repo.query_observations()
+    except Exception as exc:
+        _LOGGER.debug("Could not query observations for history view: %s", exc)
+        history_records = []
     verification_sensors = entry.options.get(
         CONF_VERIFICATION_SENSORS, entry.data.get(CONF_VERIFICATION_SENSORS, {})
     )

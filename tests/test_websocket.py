@@ -1,6 +1,7 @@
 """Unit tests for WebSocket API commands."""
 
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -43,6 +44,19 @@ async def test_websocket_commands_overview_and_history(hass, hass_ws_client):
     resp_hist = await client.receive_json()
     assert resp_hist["success"] is True
     assert "recent_observations" in resp_hist["result"]
+
+    entry.runtime_data.coordinator.repo.query_observations = AsyncMock(
+        side_effect=RuntimeError("database is locked")
+    )
+    await client.send_json_auto_id(
+        {
+            "type": "forecast_fusion/get_history",
+            "config_entry_id": entry.entry_id,
+        }
+    )
+    resp_locked_history = await client.receive_json()
+    assert resp_locked_history["success"] is True
+    assert resp_locked_history["result"]["observations_count"] == 0
 
     # Test submit_feedback
     now_iso = datetime.now(UTC).isoformat()

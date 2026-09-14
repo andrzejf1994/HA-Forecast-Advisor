@@ -28,11 +28,14 @@ class SQLiteRepository:
         """Initialize repository with database path."""
         self.db_path = db_path
         self._migrations_applied = False
+        self._write_lock = asyncio.Lock()
 
     def _get_connection(self) -> sqlite3.Connection:
         """Create and configure a new SQLite connection."""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=2.0)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout = 2000")
+        conn.execute("PRAGMA journal_mode = WAL")
         if not self._migrations_applied:
             apply_migrations(conn)
             self._migrations_applied = True
@@ -112,7 +115,8 @@ class SQLiteRepository:
             finally:
                 conn.close()
 
-        await asyncio.to_thread(_do_save)
+        async with self._write_lock:
+            await asyncio.to_thread(_do_save)
 
     async def query_snapshots(
         self,
@@ -208,7 +212,8 @@ class SQLiteRepository:
             finally:
                 conn.close()
 
-        return await asyncio.to_thread(_do_delete)
+        async with self._write_lock:
+            return await asyncio.to_thread(_do_delete)
 
     async def save_observation(self, observation: Observation) -> None:
         """Save a ground truth observation."""
@@ -241,7 +246,8 @@ class SQLiteRepository:
             finally:
                 conn.close()
 
-        await asyncio.to_thread(_do_save)
+        async with self._write_lock:
+            await asyncio.to_thread(_do_save)
 
     async def query_observations(
         self,
@@ -319,7 +325,8 @@ class SQLiteRepository:
             finally:
                 conn.close()
 
-        return await asyncio.to_thread(_do_delete)
+        async with self._write_lock:
+            return await asyncio.to_thread(_do_delete)
 
     async def save_verification_results(self, results: list[VerificationResult]) -> None:
         """Save verification results."""
@@ -356,7 +363,8 @@ class SQLiteRepository:
             finally:
                 conn.close()
 
-        await asyncio.to_thread(_do_save)
+        async with self._write_lock:
+            await asyncio.to_thread(_do_save)
 
     async def reset_database(self) -> None:
         """Clear all records from all database tables."""
@@ -382,6 +390,5 @@ class SQLiteRepository:
             finally:
                 conn.close()
 
-        await asyncio.to_thread(_do_reset)
-
-
+        async with self._write_lock:
+            await asyncio.to_thread(_do_reset)

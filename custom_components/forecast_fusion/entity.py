@@ -16,7 +16,7 @@ class ForecastFusionBaseEntity(CoordinatorEntity[ForecastFusionCoordinator]):
         self,
         coordinator: ForecastFusionCoordinator,
         unique_id: str,
-        name: str,
+        name: str | None,
     ) -> None:
         """Initialize base entity."""
         super().__init__(coordinator)
